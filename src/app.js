@@ -1,8 +1,10 @@
 
-
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
+const authRoutes = require("./routes/authRoutes");
+const postRoutes = require("./routes/postRoutes");
+const accountRoutes = require("./routes/accountRoutes");
 
 const app = express();
 
@@ -14,11 +16,10 @@ app.use(express.json());
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });
-app.get("/",(req,res)=>{
-    return res.status(200).json({
-        message:"wolcome to my server "
-    })
-})
+app.use("/api/auth", authRoutes);
+app.use("/api/posts", postRoutes);
+app.use("/api/account", accountRoutes);
+
 
 module.exports = app;
 
