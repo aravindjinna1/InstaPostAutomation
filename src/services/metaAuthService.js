@@ -142,9 +142,22 @@ async function completeInstagramConnection(code) {
   };
 }
 
+/**
+ * Refreshes an existing long-lived Page Access Token.
+ * Meta allows re-exchanging a still-valid long-lived token for a
+ * fresh one with a new ~60-day expiry, using the same
+ * fb_exchange_token grant type as the initial upgrade.
+ * Must be called BEFORE the current token expires - an already
+ * expired token cannot be refreshed and requires reconnecting.
+ */
+async function refreshLongLivedToken(currentToken) {
+  return exchangeForLongLivedToken(currentToken);
+}
+
 module.exports = {
   exchangeCodeForShortLivedToken,
   exchangeForLongLivedToken,
+  refreshLongLivedToken,
   getPages,
   getInstagramBusinessAccountId,
   completeInstagramConnection,

@@ -10,6 +10,7 @@ const Account = require("../models/Account");
 const Post = require("../models/Post");
 const { runDailyPostPipeline } = require("../graph/postPipeline");
 const { decrypt } = require("../utils/encryption");
+const { refreshExpiringTokens } = require("../controllers/tokenController");
 
 /**
  * Creates a "processing" Post document, runs the pipeline against it,
@@ -98,7 +99,29 @@ function startDailyPostCron() {
   console.log(`[Cron] Daily post job scheduled with expression: ${cronExpression}`);
 }
 
+/**
+ * Registers the recurring weekly token refresh job.
+ * Runs every Monday at 3 AM by default - refreshes any account
+ * whose token is within 10 days of expiring.
+ */
+function startTokenRefreshCron() {
+  const cronExpression = process.env.TOKEN_REFRESH_CRON || "0 3 * * 1";
+
+  if (!cron.validate(cronExpression)) {
+    console.error(`[Cron] Invalid cron expression: ${cronExpression} - token refresh not scheduled`);
+    return;
+  }
+
+  cron.schedule(cronExpression, async () => {
+    console.log(`[Cron] Token refresh job triggered at ${new Date().toISOString()}`);
+    await refreshExpiringTokens();
+  });
+
+  console.log(`[Cron] Token refresh job scheduled with expression: ${cronExpression}`);
+}
+
 module.exports = {
   startDailyPostCron,
+  startTokenRefreshCron,
   triggerDailyPost,
 };
