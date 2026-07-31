@@ -9,6 +9,7 @@ const cron = require("node-cron");
 const Account = require("../models/Account");
 const Post = require("../models/Post");
 const { runDailyPostPipeline } = require("../graph/postPipeline");
+const { decrypt } = require("../utils/encryption");
 
 /**
  * Creates a "processing" Post document, runs the pipeline against it,
@@ -45,10 +46,26 @@ async function triggerDailyPost() {
 
   console.log(`[Cron] Starting pipeline for post ${post._id}`);
 
+  /**
+   * Decrypt the stored token right before use - it should never sit
+   * in memory unencrypted for longer than necessary.
+   */
+  let decryptedToken;
+  try {
+    decryptedToken = decrypt(account.pageAccessToken);
+  } catch (err) {
+    console.error("[Cron] Failed to decrypt access token:", err.message);
+    await Post.findByIdAndUpdate(post._id, {
+      status: "failed",
+      errorMessage: "Failed to decrypt stored access token",
+    });
+    return { success: false, error: "Failed to decrypt access token" };
+  }
+
   const finalState = await runDailyPostPipeline({
     postId: post._id.toString(),
     igUserId: account.igUserId,
-    accessToken: account.pageAccessToken,
+    accessToken: decryptedToken,
   });
 
   if (finalState.error) {

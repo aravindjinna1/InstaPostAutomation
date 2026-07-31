@@ -6,6 +6,7 @@
 const Account = require("../models/Account");
 const { completeInstagramConnection } = require("../services/metaAuthService");
 const { META_APP_ID, META_REDIRECT_URI } = require("../config/meta");
+const { encrypt } = require("../utils/encryption");
 
 /**
  * GET /api/auth/instagram
@@ -50,13 +51,16 @@ async function handleInstagramCallback(req, res) {
     return res.status(500).json({ success: false, stage: result.stage, error: result.error });
   }
 
+  /** Encrypt the token before it ever touches the database. */
+  const encryptedToken = encrypt(result.pageAccessToken);
+
   /** Upsert - if this igUserId already exists, update its token instead of duplicating. */
   const account = await Account.findOneAndUpdate(
     { igUserId: result.igUserId },
     {
       igUserId: result.igUserId,
       pageId: result.pageId,
-      pageAccessToken: result.pageAccessToken,
+      pageAccessToken: encryptedToken,
       tokenExpiresAt: result.tokenExpiresAt,
       isActive: true,
     },
