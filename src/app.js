@@ -14,6 +14,11 @@ app.use(express.json());
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });
+app.get("/",(req,res)=>{
+    return res.status(200).json({
+        message:"wolcome to my server "
+    })
+})
 
 module.exports = app;
 
