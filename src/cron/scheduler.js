@@ -53,7 +53,7 @@ async function triggerDailyPost() {
    */
   let decryptedToken;
   try {
-    decryptedToken = decrypt(account.pageAccessToken);
+    decryptedToken = decrypt(account.accessToken);
   } catch (err) {
     console.error("[Cron] Failed to decrypt access token:", err.message);
     await Post.findByIdAndUpdate(post._id, {

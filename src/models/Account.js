@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const accountSchema = new mongoose.Schema(
   {
-    // Instagram Business Account ID (from Graph API)
+    // Instagram Business Account ID (from Instagram Login)
     igUserId: {
       type: String,
       required: true,
@@ -15,14 +15,8 @@ const accountSchema = new mongoose.Schema(
       default: "",
     },
 
-    // Facebook Page ID linked to this IG account
-    pageId: {
-      type: String,
-      required: true,
-    },
-
-    // Encrypted long-lived Page Access Token (we'll add encryption in the service layer)
-    pageAccessToken: {
+    // Encrypted long-lived Instagram access token
+    accessToken: {
       type: String,
       required: true,
     },

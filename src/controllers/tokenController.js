@@ -5,7 +5,7 @@
  */
 
 const Account = require("../models/Account");
-const { refreshLongLivedToken } = require("../services/metaAuthService");
+const { refreshLongLivedToken } = require("../services/instagramAuthService");
 const { encrypt, decrypt } = require("../utils/encryption");
 
 /**
@@ -16,7 +16,7 @@ const { encrypt, decrypt } = require("../utils/encryption");
 async function refreshAccountToken(account) {
   let currentToken;
   try {
-    currentToken = decrypt(account.pageAccessToken);
+    currentToken = decrypt(account.accessToken);
   } catch (err) {
     return { success: false, error: `Failed to decrypt stored token: ${err.message}` };
   }
@@ -31,7 +31,7 @@ async function refreshAccountToken(account) {
     Date.now() + (result.expiresInSeconds || 5184000) * 1000
   );
 
-  account.pageAccessToken = encrypt(result.accessToken);
+  account.accessToken = encrypt(result.accessToken);
   account.tokenExpiresAt = tokenExpiresAt;
   await account.save();
 

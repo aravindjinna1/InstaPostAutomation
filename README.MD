@@ -1,299 +1,147 @@
-# Automated Instagram Daily Poster — System Design
+# IG Auto Poster Backend
 
-## 1. Overview
+Backend for an automated Instagram poster that generates a daily image and caption, uploads the image, and publishes it to one Instagram Business or Creator account using Instagram Login.
 
-A MERN-based system that automatically generates an AI image + caption every day and publishes it to a single Instagram Business account, orchestrated via LangGraph and scheduled via a cron job.
+## Overview
 
-**Stack**
-- **Frontend**: React (dashboard — view/manage scheduled & posted content, connect IG account)
-- **Backend**: Node.js + Express (API routes, orchestration trigger, token management)
-- **Database**: MongoDB (accounts, posts, logs)
-- **Orchestration**: LangGraph (AI generation + publish pipeline as a graph of nodes)
-- **Storage**: Cloudinary/S3 (public image hosting, required by Instagram API)
-- **External APIs**: Instagram Graph API (Meta), Gemini API (image + caption generation)
-- **Scheduler**: node-cron / Agenda.js
+- Generates captions and images with Gemini
+- Uploads images to Cloudinary
+- Publishes posts through the Instagram Graph API
+- Refreshes long-lived Instagram tokens on a cron schedule
+- Stores account tokens encrypted in MongoDB
 
----
+## Stack
 
-## 2. High-Level Architecture
+- Node.js + Express
+- MongoDB + Mongoose
+- LangGraph
+- Gemini API
+- Cloudinary
+- Instagram API with Instagram Login
 
-```mermaid
-flowchart TB
-    subgraph Client["React Frontend"]
-        UI[Dashboard UI]
-    end
+## How It Works
 
-    subgraph Server["Node.js / Express Backend"]
-        API[REST API Routes]
-        CRON[Cron Scheduler]
-        LG[LangGraph Orchestrator]
-        TOKSVC[Token Refresh Service]
-    end
+1. The user opens `GET /api/auth/instagram`
+2. The backend redirects to `https://www.instagram.com/oauth/authorize`
+3. Instagram returns an OAuth `code` to `GET /api/auth/instagram/callback`
+4. The backend exchanges that code for a short-lived token, then a long-lived token
+5. The backend encrypts and stores `igUserId`, `accessToken`, and `tokenExpiresAt`
+6. The daily cron job generates content and publishes the post
+7. The token refresh cron job renews long-lived tokens before expiry
 
-    subgraph DB["MongoDB"]
-        AccountsCol[(Accounts)]
-        PostsCol[(Posts)]
-        LogsCol[(Logs)]
-    end
+## Setup Requirements
 
-    subgraph External["External Services"]
-        GEMINI[Gemini API - Image + Caption]
-        CLOUD[Cloudinary / S3 - Public Image Host]
-        META[Instagram Graph API]
-    end
+- The Instagram account must be Business or Creator
+- The Meta Developer App must use the Instagram product
+- In Meta, choose `API setup with Instagram login`
+- No Facebook Page is required
+- No Facebook Login is used at any step
 
-    UI -->|REST calls| API
-    API --> AccountsCol
-    API --> PostsCol
-    API --> LogsCol
+## Local Setup
 
-    CRON -->|triggers daily| LG
-    LG -->|generate caption + image| GEMINI
-    LG -->|upload image| CLOUD
-    LG -->|create + publish media| META
-    LG -->|write result| LogsCol
-    LG -->|read/write status| PostsCol
+1. Install dependencies with `npm install`
+2. Copy `.env.example` to `.env`
+3. Fill in the Instagram, Gemini, Cloudinary, MongoDB, and token encryption values
+4. Start the server with `npm run dev`
 
-    TOKSVC -->|refresh long-lived token| META
-    TOKSVC --> AccountsCol
-```
+## API Routes
 
----
+- `GET /api/auth/instagram`
+- `GET /api/auth/instagram/callback`
+- `GET /api/account`
+- `POST /api/posts/run-now`
+- `GET /api/posts`
+- `GET /api/posts/:id`
+- `DELETE /api/posts/:id`
 
-## 3. LangGraph Pipeline (Node Flow)
+## Key Files
 
-```mermaid
-flowchart LR
-    START([Cron Trigger - Daily]) --> N1[Generate Caption]
-    N1 --> N2[Generate Image]
-    N2 --> N3[Upload Image to Cloudinary]
-    N3 --> N4[Create IG Media Container]
-    N4 --> N5{Container Status?}
-    N5 -->|IN_PROGRESS| WAIT[Wait / Poll]
-    WAIT --> N5
-    N5 -->|FINISHED| N6[Publish to Instagram]
-    N5 -->|ERROR| FAIL1[Log Failure]
-    N6 --> N7{Publish Success?}
-    N7 -->|Yes| LOG_OK[Log Success + IG Media ID]
-    N7 -->|No, retryable| RETRY[Retry with Backoff]
-    RETRY --> N6
-    N7 -->|No, fatal| FAIL2[Log Failure + Alert]
-    LOG_OK --> END([Done])
-    FAIL1 --> END
-    FAIL2 --> END
-```
+- [`src/config/instagram.js`](src/config/instagram.js) - Instagram API config and env vars
+- [`src/services/instagramAuthService.js`](src/services/instagramAuthService.js) - OAuth exchange and token refresh
+- [`src/services/instagramService.js`](src/services/instagramService.js) - Create media container, poll status, publish media
+- [`src/controllers/authController.js`](src/controllers/authController.js) - Connect flow and account upsert
+- [`src/controllers/tokenController.js`](src/controllers/tokenController.js) - Weekly token refresh logic
+- [`src/models/Account.js`](src/models/Account.js) - Connected account schema
+- [`src/cron/scheduler.js`](src/cron/scheduler.js) - Daily post trigger and token refresh cron jobs
+- [`src/graph/postPipeline.js`](src/graph/postPipeline.js) - AI generation and publish pipeline
 
----
+## Data Model
 
-## 4. Sequence Diagram — End-to-End Daily Post
+### Account
 
-```mermaid
-sequenceDiagram
-    participant Cron
-    participant LangGraph as LangGraph Orchestrator
-    participant Gemini as Gemini API
-    participant Cloud as Cloudinary
-    participant Meta as Instagram Graph API
-    participant Mongo as MongoDB
-
-    Cron->>LangGraph: trigger daily run
-    LangGraph->>Gemini: generate caption (prompt)
-    Gemini-->>LangGraph: caption text
-    LangGraph->>Gemini: generate image (prompt)
-    Gemini-->>LangGraph: image binary/URL
-    LangGraph->>Cloud: upload image
-    Cloud-->>LangGraph: public image URL
-    LangGraph->>Meta: POST /{ig-user-id}/media (image_url, caption)
-    Meta-->>LangGraph: creation_id
-    loop poll until ready
-        LangGraph->>Meta: GET /{creation_id}?fields=status_code
-        Meta-->>LangGraph: IN_PROGRESS / FINISHED
-    end
-    LangGraph->>Meta: POST /{ig-user-id}/media_publish (creation_id)
-    Meta-->>LangGraph: ig_media_id
-    LangGraph->>Mongo: save Post{status: posted, igMediaId}
-    LangGraph->>Mongo: save Log{success, timestamps}
-```
-
----
-
-## 5. Instagram OAuth / Token Setup Flow (one-time + refresh)
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant React as React Frontend
-    participant Express as Express Backend
-    participant Meta as Meta Graph API
-    participant Mongo as MongoDB
-
-    User->>React: Click "Connect Instagram"
-    React->>Meta: Redirect to OAuth consent
-    Meta-->>React: redirect back with auth code
-    React->>Express: send auth code
-    Express->>Meta: exchange code for short-lived token
-    Meta-->>Express: short-lived user token
-    Express->>Meta: exchange for long-lived token (60 days)
-    Meta-->>Express: long-lived token
-    Express->>Meta: GET /me/accounts (Page ID + Page token)
-    Meta-->>Express: page data
-    Express->>Meta: GET /{page-id}?fields=instagram_business_account
-    Meta-->>Express: IG Business Account ID
-    Express->>Mongo: store encrypted token + IG account ID
-
-    Note over Express,Meta: Weekly cron job refreshes token before 60-day expiry
-    Express->>Meta: refresh long-lived token
-    Meta-->>Express: new token + new expiry
-    Express->>Mongo: update stored token
-```
-
----
-
-## 6. Data Model (ER Diagram)
-
-```mermaid
-erDiagram
-    ACCOUNT {
-        ObjectId _id
-        string igUserId
-        string pageAccessToken
-        date tokenExpiresAt
-        string igUsername
-        date createdAt
-    }
-
-    POST {
-        ObjectId _id
-        ObjectId accountId
-        string caption
-        string imageUrl
-        string igCreationId
-        string igMediaId
-        string status
-        date scheduledTime
-        date publishedAt
-    }
-
-    LOG {
-        ObjectId _id
-        ObjectId postId
-        string stage
-        string status
-        string message
-        date timestamp
-    }
-
-    ACCOUNT ||--o{ POST : owns
-    POST ||--o{ LOG : generates
-```
-
----
-
-## 7. MongoDB Collections (Schema Summary)
-
-**accounts**
 | Field | Type | Notes |
-|---|---|---|
-| igUserId | String | Instagram Business Account ID |
-| pageAccessToken | String (encrypted) | AES-encrypted at rest |
-| tokenExpiresAt | Date | Used by refresh cron |
-| igUsername | String | Display only |
+| --- | --- | --- |
+| `igUserId` | String | Instagram user ID returned by Instagram Login |
+| `igUsername` | String | Display only |
+| `accessToken` | String | Encrypted long-lived Instagram token |
+| `tokenExpiresAt` | Date | Token expiry timestamp |
+| `isActive` | Boolean | Whether the account is used for auto-posting |
 
-**posts**
+### Post
+
 | Field | Type | Notes |
-|---|---|---|
-| accountId | ObjectId (ref Account) | |
-| caption | String | AI-generated |
-| imageUrl | String | Cloudinary public URL |
-| igCreationId | String | From media container step |
-| igMediaId | String | Final published media ID |
-| status | Enum | `pending / processing / posted / failed` |
-| scheduledTime | Date | When cron should run it |
-| publishedAt | Date | Set on success |
+| --- | --- | --- |
+| `accountId` | ObjectId | Refers to `Account` |
+| `caption` | String | AI-generated caption |
+| `imageUrl` | String | Public Cloudinary image URL |
+| `igCreationId` | String | Media container ID |
+| `igMediaId` | String | Published Instagram media ID |
+| `status` | String | `pending`, `processing`, `posted`, or `failed` |
+| `scheduledTime` | Date | Time the post was scheduled |
+| `publishedAt` | Date | Set when publish succeeds |
+| `errorMessage` | String | Populated when a run fails |
 
-**logs**
+### Log
+
 | Field | Type | Notes |
-|---|---|---|
-| postId | ObjectId (ref Post) | |
-| stage | String | e.g. `caption_gen`, `image_gen`, `publish` |
-| status | Enum | `success / failure` |
-| message | String | Error detail or confirmation |
+| --- | --- | --- |
+| `postId` | ObjectId | Refers to `Post` |
+| `stage` | String | Pipeline stage name |
+| `status` | String | `success` or `failure` |
+| `message` | String | Human-readable details |
 
----
+## Environment Variables
 
-## 8. REST API Routes
+```env
+# --- Server ---
+PORT=5000
+NODE_ENV=development
 
-```mermaid
-flowchart LR
-    subgraph Auth
-        A1["GET /api/auth/instagram"]
-        A2["GET /api/auth/instagram/callback"]
-    end
-    subgraph Posts
-        P1["POST /api/posts/run-now"]
-        P2["GET /api/posts"]
-        P3["GET /api/posts/:id"]
-        P4["DELETE /api/posts/:id"]
-    end
-    subgraph Accounts
-        AC1["GET /api/account"]
-        AC2["POST /api/account/refresh-token"]
-    end
+# --- MongoDB ---
+MONGO_URI=mongodb://localhost:27017/perplexity
+
+# --- Token Encryption ---
+TOKEN_ENCRYPTION_KEY=
+
+# --- Instagram Login ---
+INSTAGRAM_APP_ID=
+INSTAGRAM_APP_SECRET=
+INSTAGRAM_REDIRECT_URI=http://localhost:5000/api/auth/instagram/callback
+
+# --- Gemini API ---
+GEMINI_API_KEY=
+GEMINI_TEXT_MODEL=gemini-2.5-flash
+GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
+
+# --- Cloudinary ---
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+# --- Scheduler ---
+DAILY_POST_CRON=0 9 * * *
+TOKEN_REFRESH_CRON=0 3 * * 1
 ```
 
----
+## Manual Instagram Setup
 
-## 9. Failure Handling & Retry Strategy
+1. Create or open your Meta Developer App
+2. Add the Instagram product
+3. Choose `API setup with Instagram login`
+4. Confirm the Instagram account is Business or Creator
+5. Copy the App ID and App Secret into `.env`
+6. Make sure `INSTAGRAM_REDIRECT_URI` matches the redirect URI in the app settings exactly
 
-| Failure Point | Strategy |
-|---|---|
-| Gemini image/caption generation fails | Retry 2x with backoff → fallback to template caption/stock image |
-| Cloudinary upload fails | Retry 2x → fail run, log, alert |
-| IG container stuck `IN_PROGRESS` | Poll every 5s, timeout after 60s → fail run |
-| IG publish returns rate-limit error | Backoff + retry once after delay |
-| Access token expired | Auto-refresh job runs before 60-day expiry; if refresh fails, alert to reconnect account manually |
+## Legacy Data Note
 
----
-
-## 10. Deployment View
-
-```mermaid
-flowchart TB
-    subgraph Client Side
-        Browser[User Browser - React App]
-    end
-    subgraph Hosting
-        FE[Frontend Host - Vercel/Netlify]
-        BE[Backend Host - Render/Railway/EC2]
-        CronJob[Cron Job - node-cron inside BE or external scheduler]
-    end
-    subgraph Data
-        MongoAtlas[(MongoDB Atlas)]
-    end
-    subgraph Third Party
-        MetaAPI[Instagram Graph API]
-        GeminiAPI[Gemini API]
-        CloudinaryS[Cloudinary]
-    end
-
-    Browser --> FE
-    FE --> BE
-    BE --> MongoAtlas
-    CronJob --> BE
-    BE --> MetaAPI
-    BE --> GeminiAPI
-    BE --> CloudinaryS
-```
-
----
-
-## 11. Build Milestones
-
-1. Meta App setup + manual test post via Postman (validate credentials work)
-2. Express backend: MongoDB models + Instagram service (auth, media container, publish, polling)
-3. AI service module: caption generation + image generation (standalone tested)
-4. Cloudinary upload service
-5. LangGraph pipeline wiring all nodes together with retry/error edges
-6. Cron trigger for daily automated run
-7. React dashboard: connect account, view post history/logs, manual "run now" trigger
-8. Token refresh cron job
+If your MongoDB still has accounts created under the old Page-based flow, they are not compatible with the current schema. Delete those legacy documents and reconnect the account through `GET /api/auth/instagram`.

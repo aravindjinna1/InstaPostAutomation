@@ -1,7 +1,7 @@
 const axios = require("axios");
-const { GRAPH_API_VERSION, GRAPH_BASE_URL } = require("../config/meta");
+const { IG_GRAPH_BASE_URL } = require("../config/instagram");
 
-const BASE = `${GRAPH_BASE_URL}/${GRAPH_API_VERSION}`;
+const BASE = IG_GRAPH_BASE_URL;
 
 /**
  * STEP 1: Create a media container.
