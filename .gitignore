@@ -1,2 +1,5 @@
 node_modules
 .env
+
+# Git Auto Commit Generator learned data
+.git-auto-commit/
