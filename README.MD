@@ -34,7 +34,7 @@ Backend for an automated Instagram poster that generates a daily image and capti
 - The Instagram account must be Business or Creator
 - The Meta Developer App must use the Instagram product
 - In Meta, choose `API setup with Instagram login`
-- No Facebook Page is required
+- No separate page setup is required
 - No Facebook Login is used at any step
 
 ## Local Setup

@@ -1,3 +1,26 @@
+# Instagram Login Migration Update
+
+Switched the backend auth layer from the old Facebook Page based Instagram Graph API flow to Instagram Login only.
+
+Why:
+- The app no longer depends on a Facebook Page.
+- The connected account is now expected to be an Instagram Business or Creator account.
+
+Breaking change:
+- Legacy `Account` documents created with `pageId` and `pageAccessToken` are not compatible with the new schema.
+- Delete those old account documents from MongoDB and reconnect the account through `GET /api/auth/instagram`.
+
+Files touched in the migration:
+- `src/config/instagram.js`
+- `src/services/instagramAuthService.js`
+- `src/services/instagramService.js`
+- `src/controllers/authController.js`
+- `src/controllers/tokenController.js`
+- `src/models/Account.js`
+- `src/cron/scheduler.js`
+- `.env`
+- `.env.example`
+
 # IG Auto Poster — Backend Documentation
 
 Complete reference of everything built so far: every file, what each function does, and how they connect.
@@ -471,3 +494,4 @@ npm install
 ```
 
 Installs: `express`, `mongoose`, `axios`, `cloudinary`, `@langchain/langgraph`, `zod`, `node-cron`, `dotenv`, `cors` (plus `nodemon` as a dev dependency).
+
