@@ -1,10 +1,12 @@
+
 # IG Auto Poster Backend
 
 Backend for an automated Instagram poster that generates a daily image and caption, uploads the image, and publishes it to one Instagram Business or Creator account using Instagram Login.
 
 ## Overview
 
-- Generates captions and images with Gemini
+- Generates captions with Gemini
+- Generates images with Pollinations.ai (free, no API key required)
 - Uploads images to Cloudinary
 - Publishes posts through the Instagram Graph API
 - Refreshes long-lived Instagram tokens on a cron schedule
@@ -15,7 +17,8 @@ Backend for an automated Instagram poster that generates a daily image and capti
 - Node.js + Express
 - MongoDB + Mongoose
 - LangGraph
-- Gemini API
+- Gemini API (captions)
+- Pollinations.ai (images)
 - Cloudinary
 - Instagram API with Instagram Login
 
@@ -59,6 +62,7 @@ Backend for an automated Instagram poster that generates a daily image and capti
 - [`src/config/instagram.js`](src/config/instagram.js) - Instagram API config and env vars
 - [`src/services/instagramAuthService.js`](src/services/instagramAuthService.js) - OAuth exchange and token refresh
 - [`src/services/instagramService.js`](src/services/instagramService.js) - Create media container, poll status, publish media
+- [`src/services/aiService.js`](src/services/aiService.js) - Gemini captions and Pollinations.ai image generation
 - [`src/controllers/authController.js`](src/controllers/authController.js) - Connect flow and account upsert
 - [`src/controllers/tokenController.js`](src/controllers/tokenController.js) - Weekly token refresh logic
 - [`src/models/Account.js`](src/models/Account.js) - Connected account schema
@@ -69,36 +73,36 @@ Backend for an automated Instagram poster that generates a daily image and capti
 
 ### Account
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `igUserId` | String | Instagram user ID returned by Instagram Login |
-| `igUsername` | String | Display only |
-| `accessToken` | String | Encrypted long-lived Instagram token |
-| `tokenExpiresAt` | Date | Token expiry timestamp |
-| `isActive` | Boolean | Whether the account is used for auto-posting |
+| Field              | Type    | Notes                                         |
+| ------------------ | ------- | --------------------------------------------- |
+| `igUserId`       | String  | Instagram user ID returned by Instagram Login |
+| `igUsername`     | String  | Display only                                  |
+| `accessToken`    | String  | Encrypted long-lived Instagram token          |
+| `tokenExpiresAt` | Date    | Token expiry timestamp                        |
+| `isActive`       | Boolean | Whether the account is used for auto-posting  |
 
 ### Post
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `accountId` | ObjectId | Refers to `Account` |
-| `caption` | String | AI-generated caption |
-| `imageUrl` | String | Public Cloudinary image URL |
-| `igCreationId` | String | Media container ID |
-| `igMediaId` | String | Published Instagram media ID |
-| `status` | String | `pending`, `processing`, `posted`, or `failed` |
-| `scheduledTime` | Date | Time the post was scheduled |
-| `publishedAt` | Date | Set when publish succeeds |
-| `errorMessage` | String | Populated when a run fails |
+| Field             | Type     | Notes                                                  |
+| ----------------- | -------- | ------------------------------------------------------ |
+| `accountId`     | ObjectId | Refers to`Account`                                   |
+| `caption`       | String   | AI-generated caption                                   |
+| `imageUrl`      | String   | Public Cloudinary image URL                            |
+| `igCreationId`  | String   | Media container ID                                     |
+| `igMediaId`     | String   | Published Instagram media ID                           |
+| `status`        | String   | `pending`, `processing`, `posted`, or `failed` |
+| `scheduledTime` | Date     | Time the post was scheduled                            |
+| `publishedAt`   | Date     | Set when publish succeeds                              |
+| `errorMessage`  | String   | Populated when a run fails                             |
 
 ### Log
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `postId` | ObjectId | Refers to `Post` |
-| `stage` | String | Pipeline stage name |
-| `status` | String | `success` or `failure` |
-| `message` | String | Human-readable details |
+| Field       | Type     | Notes                      |
+| ----------- | -------- | -------------------------- |
+| `postId`  | ObjectId | Refers to`Post`          |
+| `stage`   | String   | Pipeline stage name        |
+| `status`  | String   | `success` or `failure` |
+| `message` | String   | Human-readable details     |
 
 ## Environment Variables
 
@@ -108,7 +112,7 @@ PORT=5000
 NODE_ENV=development
 
 # --- MongoDB ---
-MONGO_URI=mongodb://localhost:27017/perplexity
+MONGO_URI=mongodb://localhost:27017/Instagram
 
 # --- Token Encryption ---
 TOKEN_ENCRYPTION_KEY=
@@ -118,10 +122,9 @@ INSTAGRAM_APP_ID=
 INSTAGRAM_APP_SECRET=
 INSTAGRAM_REDIRECT_URI=http://localhost:5000/api/auth/instagram/callback
 
-# --- Gemini API ---
+# --- Gemini API (captions only) ---
 GEMINI_API_KEY=
-GEMINI_TEXT_MODEL=gemini-2.5-flash
-GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
+GEMINI_TEXT_MODEL=gemini-3.6-flash
 
 # --- Cloudinary ---
 CLOUDINARY_CLOUD_NAME=
@@ -132,6 +135,8 @@ CLOUDINARY_API_SECRET=
 DAILY_POST_CRON=0 9 * * *
 TOKEN_REFRESH_CRON=0 3 * * 1
 ```
+
+Note: image generation uses Pollinations.ai directly (`https://image.pollinations.ai`), which requires no API key. Gemini is used for captions only.
 
 ## Manual Instagram Setup
 
