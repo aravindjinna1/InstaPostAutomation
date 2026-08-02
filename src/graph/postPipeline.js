@@ -11,7 +11,7 @@ const { StateGraph, END } = require("@langchain/langgraph");
 const { generateCaption, generateImage } = require("../services/aiService");
 const { uploadImageToCloudinary } = require("../services/uploadService");
 const { postImageToInstagram } = require("../services/instagramService");
-const { getDailyPrompt } = require("../utils/Promptrotation");
+const { getDailyPrompt } = require("../utils/promptRotation");
 
 const Post = require("../models/Post");
 const Log = require("../models/Log");
