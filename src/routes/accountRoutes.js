@@ -7,7 +7,8 @@ const express = require("express");
 const router = express.Router();
 
 const { getAccountStatus } = require("../controllers/accountController");
+const asyncHandler = require("../utils/asyncHandler");
 
-router.get("/", getAccountStatus);
+router.get("/", asyncHandler(getAccountStatus));
 
 module.exports = router;

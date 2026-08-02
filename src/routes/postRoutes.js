@@ -12,10 +12,11 @@ const {
   getPostById,
   deletePost,
 } = require("../controllers/postController");
+const asyncHandler = require("../utils/asyncHandler");
 
-router.post("/run-now", runNow);
-router.get("/", listPosts);
-router.get("/:id", getPostById);
-router.delete("/:id", deletePost);
+router.post("/run-now", asyncHandler(runNow));
+router.get("/", asyncHandler(listPosts));
+router.get("/:id", asyncHandler(getPostById));
+router.delete("/:id", asyncHandler(deletePost));
 
 module.exports = router;

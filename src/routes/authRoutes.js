@@ -10,8 +10,9 @@ const {
   redirectToInstagramAuth,
   handleInstagramCallback,
 } = require("../controllers/authController");
+const asyncHandler = require("../utils/asyncHandler");
 
-router.get("/instagram", redirectToInstagramAuth);
-router.get("/instagram/callback", handleInstagramCallback);
+router.get("/instagram", asyncHandler(redirectToInstagramAuth));
+router.get("/instagram/callback", asyncHandler(handleInstagramCallback));
 
 module.exports = router;
