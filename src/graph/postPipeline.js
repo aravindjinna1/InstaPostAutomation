@@ -11,6 +11,7 @@ const { StateGraph, END } = require("@langchain/langgraph");
 const { generateCaption, generateImage } = require("../services/aiService");
 const { uploadImageToCloudinary } = require("../services/uploadService");
 const { postImageToInstagram } = require("../services/instagramService");
+const { getDailyPrompt } = require("../utils/promptRotation");
 
 const Post = require("../models/Post");
 const Log = require("../models/Log");
@@ -48,9 +49,12 @@ async function writeLog(postId, stage, status, message) {
 
 /**
  * Node 1: Generate the caption text via Gemini.
+ * Uses today's rotating theme so the topic changes daily instead
+ * of always using the same default prompt.
  */
 async function generateCaptionNode(state) {
-  const result = await generateCaption();
+  const { captionTopic } = getDailyPrompt();
+  const result = await generateCaption(captionTopic);
 
   if (!result.success) {
     await writeLog(state.postId, "caption_generation", "failure", result.error);
@@ -62,11 +66,14 @@ async function generateCaptionNode(state) {
 }
 
 /**
- * Node 2: Generate the image via Gemini.
+ * Node 2: Generate the image via Pollinations.ai.
+ * Uses today's rotating theme so the visual style changes daily
+ * alongside the caption topic.
  * Returns base64 data - not yet a usable public URL.
  */
 async function generateImageNode(state) {
-  const result = await generateImage();
+  const { imagePrompt } = getDailyPrompt();
+  const result = await generateImage(imagePrompt);
 
   if (!result.success) {
     await writeLog(state.postId, "image_generation", "failure", result.error);

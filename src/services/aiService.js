@@ -44,10 +44,10 @@ async function generateCaption(topicPrompt) {
 }
 
 /**
- * Generates an image for the daily Instagram post.
+ * Generates an image for the daily Instagram post using Pollinations.ai's
+ * Flux model - free, no API key, no signup, no billing required.
  * Returns raw base64 image data + mime type - the caller (Cloudinary
- * upload service, built next) is responsible for turning this into
- * a public URL.
+ * upload service) is responsible for turning this into a public URL.
  */
 async function generateImage(imagePrompt) {
   const prompt =
@@ -55,32 +55,25 @@ async function generateImage(imagePrompt) {
     "A clean, minimal, aesthetic photo representing daily motivation and productivity, soft natural lighting, no text.";
 
   try {
-    const url = `${GEMINI_BASE_URL}/${IMAGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
-    const response = await axios.post(url, {
-      contents: [
-        {
-          parts: [{ text: prompt }],
-        },
-      ],
+    const response = await axios.get(url, {
+      params: {
+        width: 1024,
+        height: 1024,
+        nologo: true,
+      },
+      responseType: "arraybuffer",
     });
 
-    const parts = response.data?.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find((p) => p.inlineData);
+    const base64Data = Buffer.from(response.data).toString("base64");
+    const mimeType = response.headers["content-type"] || "image/jpeg";
 
-    if (!imagePart) {
-      return { success: false, error: "No image data returned from Gemini" };
-    }
-
-    return {
-      success: true,
-      base64Data: imagePart.inlineData.data,
-      mimeType: imagePart.inlineData.mimeType || "image/png",
-    };
+    return { success: true, base64Data, mimeType };
   } catch (err) {
     return {
       success: false,
-      error: err.response?.data?.error?.message || err.message,
+      error: err.response?.data?.toString() || err.message,
     };
   }
 }
