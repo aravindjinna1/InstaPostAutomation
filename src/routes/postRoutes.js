@@ -14,7 +14,7 @@ const {
 } = require("../controllers/postController");
 const asyncHandler = require("../utils/asyncHandler");
 
-router.post("/run-now", asyncHandler(runNow));
+router.get("/run-now", asyncHandler(runNow));
 router.get("/", asyncHandler(listPosts));
 router.get("/:id", asyncHandler(getPostById));
 router.delete("/:id", asyncHandler(deletePost));
