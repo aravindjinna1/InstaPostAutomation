@@ -13,7 +13,7 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { connectDB } = require('../src/config/db');
+const  connectDB  = require('../src/config/db');
 const Account = require('../src/models/Account');
 const Post = require('../src/models/Post');
 const { decrypt } = require('../src/utils/encryption');
@@ -36,17 +36,17 @@ async function runDailyPost() {
   const post = await Post.create({
     accountId: account._id,
     status: 'processing',
+    scheduledTime: new Date(),
   });
 
   const accessToken = decrypt(account.accessToken);
 
   const result = await runDailyPostPipeline({
-    accountId: account._id,
-    postId: post._id,
+    accountId: account._id.toString(),
+    postId: post._id.toString(),
     igUserId: account.igUserId,
     accessToken,
   });
-
   return result;
 }
 
