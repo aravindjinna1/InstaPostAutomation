@@ -1,4 +1,3 @@
-
 # IG Auto Poster — Full Project Documentation
 
 This covers everything currently built in this project: every folder, every file, what each function does, and how it all connects. Written so you can understand your own vibe-coded app end to end.
