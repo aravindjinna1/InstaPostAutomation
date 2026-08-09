@@ -8,12 +8,18 @@ require("@langchain/langgraph/zod");
 const { z } = require("zod");
 const { StateGraph, END } = require("@langchain/langgraph");
 
-const { generateCaption, generateImage } = require("../services/aiService");
-const { uploadImageToCloudinary } = require("../services/uploadService");
-const { postImageToInstagram } = require("../services/instagramService");
+const { generateCaption, generateImage, generateImageWithGemini, generateJobPost } = require("../services/aiService");
+const { uploadImageToCloudinary, uploadVideoToCloudinary } = require("../services/uploadService");
+const { postImageToInstagram, postReelToInstagram } = require("../services/instagramService");
 const { getDailyPrompt } = require("../utils/promptrotationdaily");
+const { buildRealJobCaption, buildJobImagePrompt } = require("../utils/jobPrompts");
+const { imageToReelVideo } = require("../services/videoService");
+const { pickRandomSong } = require("../utils/trendingMusic");
+const { renderJobPoster } = require("../services/posterService");
+const { getFreshJob } = require("../services/jobDataService");
 
 const Post = require("../models/Post");
+const Job = require("../models/Job");
 const Log = require("../models/Log");
 
 /**
@@ -26,10 +32,13 @@ const PostState = z.object({
   igUserId: z.string().optional(),
   accessToken: z.string().optional(),
   postId: z.string().optional(),
+  job: z.any().optional(),
   caption: z.string().optional(),
   imageBase64: z.string().optional(),
   imageMimeType: z.string().optional(),
   imageUrl: z.string().optional(),
+  videoUrl: z.string().optional(),
+  audioName: z.string().optional(),
   igMediaId: z.string().optional(),
   error: z.string().optional(),
   failedStage: z.string().optional(),
@@ -48,72 +57,161 @@ async function writeLog(postId, stage, status, message) {
 }
 
 /**
- * Node 1: Generate the caption text via Gemini.
- * Uses today's rotating theme so the topic changes daily instead
- * of always using the same default prompt.
+ * Node 1: Fetch a FRESH real-time job from multiple external sources and
+ * build an engaging Instagram caption from it. The caption includes the real
+ * Apply Link + resource link so followers can apply directly. Only the chosen
+ * job is persisted (with its apply link) — fresh candidates are fetched on
+ * every run, never reused from storage.
  */
 async function generateCaptionNode(state) {
-  const { captionTopic } = getDailyPrompt();
-  const result = await generateCaption(captionTopic);
+  // Fetch a fresh job (live multi-source pull, prioritized for India/freshers).
+  const job = await getFreshJob();
 
-  if (!result.success) {
-    await writeLog(state.postId, "caption_generation", "failure", result.error);
-    return { error: result.error, failedStage: "caption_generation" };
+  if (!job) {
+    const err = "No job could be fetched from the external source or fallback";
+    await writeLog(state.postId, "job_generation", "failure", err);
+    return { error: err, failedStage: "job_generation" };
   }
 
-  await writeLog(state.postId, "caption_generation", "success", result.caption);
-  return { caption: result.caption };
+  const caption = buildRealJobCaption(job);
+
+  await writeLog(state.postId, "job_generation", "success", `${job.role || ""} @ ${job.company || ""} (${job.applyLink || job.resourceLink || ""})`);
+  await writeLog(state.postId, "caption_generation", "success", caption);
+  return { job, caption };
 }
 
 /**
- * Node 2: Generate the image via Pollinations.ai.
- * Uses today's rotating theme so the visual style changes daily
- * alongside the caption topic.
- * Returns base64 data - not yet a usable public URL.
+ * Node 2: Generate the recruitment poster.
+ *
+ * STRATEGY (always produces a correctly-spelled poster, no hard failure):
+ *  1. PRIMARY — Gemini Imagen renders the ENTIRE poster (all text baked in)
+ *     in the premium "poster-preview-v232.png" style. Only used if available.
+ *  2. AUTOMATIC FALLBACK — if Gemini image generation is unavailable
+ *     (quota/billing/any error), we render the poster locally with canvas:
+ *     a free Pollinations/Flux photo background + then overlay crisp,
+ *     correctly-spelled job text via posterService. This does NOT depend on
+ *     Gemini or any paid image API, so a real poster is ALWAYS produced.
+ *
+ * Because Gemini image generation is frequently rate-limited/exhausted,
+ * the canvas fallback is enabled automatically (no env flag needed).
  */
 async function generateImageNode(state) {
-  const { imagePrompt } = getDailyPrompt();
-  const result = await generateImage(imagePrompt);
+  const imagePrompt = buildJobImagePrompt(state.job || {});
 
-  if (!result.success) {
-    await writeLog(state.postId, "image_generation", "failure", result.error);
-    return { error: result.error, failedStage: "image_generation" };
+  // ---- 1. PRIMARY: Gemini Imagen full-poster ----
+  const result = await generateImageWithGemini(imagePrompt);
+
+  if (result.success) {
+    await writeLog(state.postId, "image_generation", "success", "Job poster generated by Gemini AI");
+    return {
+      imageBase64: result.base64Data,
+      imageMimeType: result.mimeType || "image/png",
+    };
   }
 
-  await writeLog(state.postId, "image_generation", "success", "Image generated");
-  return { imageBase64: result.base64Data, imageMimeType: result.mimeType };
+  // Gemini failed — note WHY for the log, but continue to auto fallback.
+  const isQuota = /quota|billing|rate|limit/i.test(result.error || "");
+  const reason = isQuota
+    ? "Gemini image quota exhausted (check billing at aistudio.google.com or use a different API key)"
+    : `Gemini image generation failed: ${result.error}`;
+  console.warn("[Pipeline] " + reason + " — auto-falling back to canvas poster.");
+
+// ---- 2. FALLBACK: free photo background + canvas text overlay ----
+  const bgPrompt =
+    "Modern corporate IT campus headquarters building, blue glass architecture skyscraper, bright blue sky, green trees and road, professional real estate photography, corporate recruitment campaign, bright airy premium, vertical 9:16, no text, no words, no people, high quality";
+  const bg = await generateImage(bgPrompt);
+
+  if (!bg.success) {
+    await writeLog(state.postId, "image_generation", "failure", `${reason}. And fallback background also failed: ${bg.error}`);
+    return { error: `${reason}. Fallback background also failed: ${bg.error}`, failedStage: "image_generation" };
+  }
+
+  // Overlay crisp, correctly-spelled poster text on top of the photo.
+  const poster = await renderJobPoster({
+    backgroundBuffer: Buffer.from(bg.base64Data, "base64"),
+    job: state.job || {},
+  });
+
+  if (!poster.success) {
+    await writeLog(state.postId, "image_generation", "failure", `${reason}. And canvas overlay failed: ${poster.error}`);
+    return { error: `${reason}. Canvas overlay failed: ${poster.error}`, failedStage: "image_generation" };
+  }
+
+  await writeLog(state.postId, "image_generation", "success", "Job poster (canvas overlay, photo bg) generated — Gemini was unavailable: " + result.error);
+  return {
+    imageBase64: poster.buffer.toString("base64"),
+    imageMimeType: "image/png",
+  };
 }
 
 /**
- * Node 3: Upload the generated image to Cloudinary to get a public URL.
- * Instagram's API requires a public image_url, not raw base64.
+ * Node 3: Convert the poster into a Reel video and upload to Cloudinary.
+ * Reels require a hosted video URL. We convert the poster image into a
+ * short static MP4 (no animation) and upload it as a video resource.
  */
 async function uploadImageNode(state) {
-  const result = await uploadImageToCloudinary({
-    base64Data: state.imageBase64,
-    mimeType: state.imageMimeType,
+  // Pick a random trending song from a random Indian language (Telugu,
+  // Hindi, Tamil, Malayalam, Kannada, English, Punjabi, etc.) so each Reel
+  // gets a different trending track. Instagram tries to attach its licensed
+  // version via audio_name.
+  // Respect an optional preferred mood via env `PREFERRED_MOOD` (e.g. 'motivational' or 'energetic')
+  const preferredMood = process.env.PREFERRED_MOOD || "";
+  const song = pickRandomSong(preferredMood);
+  if (song && song.songName) {
+    await writeLog(
+      state.postId,
+      "music_selection",
+      "success",
+      `${song.songName} (${song.language})`
+    );
+  }
+
+  // Convert the poster into a silent Reel video. The trending song is NOT
+  // embedded here - Instagram attaches its own licensed track via audio_name,
+  // which is the safe, legit way to add real trending music.
+  const video = await imageToReelVideo({
+    imageBuffer: Buffer.from(state.imageBase64, "base64"),
+  });
+
+  if (!video.success) {
+    await writeLog(state.postId, "video_creation", "failure", video.error);
+    return { error: video.error, failedStage: "video_creation" };
+  }
+
+  const videoBase64 = video.buffer.toString("base64");
+
+  const result = await uploadVideoToCloudinary({
+    base64Data: videoBase64,
+    mimeType: "video/mp4",
   });
 
   if (!result.success) {
-    await writeLog(state.postId, "image_upload", "failure", result.error);
-    return { error: result.error, failedStage: "image_upload" };
+    await writeLog(state.postId, "video_upload", "failure", result.error);
+    return { error: result.error, failedStage: "video_upload" };
   }
 
-  await writeLog(state.postId, "image_upload", "success", result.publicUrl);
-  return { imageUrl: result.publicUrl };
+  await writeLog(state.postId, "video_upload", "success", result.publicUrl);
+  return {
+    videoUrl: result.publicUrl,
+    audioName: song ? song.songName : "",
+  };
 }
 
 /**
- * Node 4: Publish to Instagram.
- * instagramService.postImageToInstagram() internally handles the
- * create-container -> poll-status -> publish sequence.
+ * Node 4: Publish to Instagram as a REEL.
+ * Reels get far wider reach than feed posts. The selected trending song
+ * (audio_name) is passed to Instagram, which attaches its OWN licensed
+ * version of the track from its music catalog - the safe, legit way to
+ * add trending audio. If the song isn't in IG's catalog the Reel is
+ * still published (just without that specific audio).
  */
 async function publishToInstagramNode(state) {
-  const result = await postImageToInstagram({
+  const result = await postReelToInstagram({
     igUserId: state.igUserId,
     accessToken: state.accessToken,
-    imageUrl: state.imageUrl,
+    videoUrl: state.videoUrl,
     caption: state.caption,
+    audioName: state.audioName,
   });
 
   if (!result.success) {
@@ -135,11 +233,38 @@ async function finalizeNode(state) {
       status: "failed",
       errorMessage: `[${state.failedStage}] ${state.error}`,
     });
-  } else {
+} else {
+    // Link the stored real job to this post and mark it as posted so it
+    // won't be reused for a future post.
+    const job = state.job;
+    if (job && job._id) {
+      await Job.findByIdAndUpdate(job._id, {
+        isPosted: true,
+        postId: state.postId,
+        postedDate: new Date(),
+      });
+    }
+
     await Post.findByIdAndUpdate(state.postId, {
       status: "posted",
+      // Reference + FULL denormalized job content so the Post doc holds every
+      // detail (skills, description, location, salary, eligibility, links).
+      jobId: job ? job._id : null,
+      company: job ? job.company : "",
+      role: job ? job.role : "",
+      location: job ? job.location : "",
+      eligibility: job ? (job.eligibility || job.experience) : "",
+      jobType: job ? job.jobType : "",
+      skills: job ? job.skills : "",
+      salaryRange: job ? job.salaryRange : "",
+      description: job ? job.description : "",
+      applyLink: job ? job.applyLink : "",
+      resourceLink: job ? job.resourceLink : "",
+      source: job ? job.source : "",
       igMediaId: state.igMediaId,
       imageUrl: state.imageUrl,
+      videoUrl: state.videoUrl,
+      audioName: state.audioName,
       caption: state.caption,
       publishedAt: new Date(),
     });

@@ -6,5 +6,7 @@ module.exports = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   GEMINI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/models",
   TEXT_MODEL: process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash",
-  IMAGE_MODEL: process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image",
+  // Nano Banana Pro is the premium choice for complex, brand-aware hero art.
+  // Set GEMINI_IMAGE_MODEL=gemini-3.1-flash-image for a lower-cost daily run.
+  IMAGE_MODEL: process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image",
 };

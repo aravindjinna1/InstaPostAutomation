@@ -5,6 +5,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const postRoutes = require("./routes/postRoutes");
 const accountRoutes = require("./routes/accountRoutes");
+const jobRoutes = require("./routes/jobRoutes");
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/account", accountRoutes);
+app.use("/api/jobs", jobRoutes);
 
 
 module.exports = app;

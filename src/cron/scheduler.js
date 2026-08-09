@@ -1,6 +1,6 @@
 /**
- * Cron scheduler - triggers the daily Instagram posting pipeline
- * at a configured time. Also exposes a `runNow()` helper used by
+ * Cron scheduler - triggers the recurring Instagram posting pipeline
+ * at a configured interval. Also exposes a `runNow()` helper used by
  * the manual "run now" API route.
  */
 
@@ -84,7 +84,7 @@ async function triggerDailyPost() {
  * (defaults to 9:00 AM server time if not set).
  */
 function startDailyPostCron() {
-  const cronExpression = process.env.DAILY_POST_CRON || "0 9 * * *";
+  const cronExpression = process.env.DAILY_POST_CRON || "0 */2 * * *";
 
   if (!cron.validate(cronExpression)) {
     console.error(`[Cron] Invalid cron expression: ${cronExpression} - job not scheduled`);

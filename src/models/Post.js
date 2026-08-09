@@ -9,14 +9,81 @@ const postSchema = new mongoose.Schema(
       required: true,
     },
 
-    // AI-generated caption text
+// AI-generated caption text
     caption: {
       type: String,
       default: "",
     },
 
-    // Public image URL (Cloudinary) - required before publishing
+// Reference to the stored REAL job this post was created from.
+    jobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Job",
+      default: null,
+    },
+
+    // --- Denormalized FULL job content (copied from the Job doc at publish
+    // time so the Post collection holds complete job details: skills,
+    // description, location, salary, eligibility — not just company/role/link).
+    company: {
+      type: String,
+      default: "",
+    },
+    role: {
+      type: String,
+      default: "",
+    },
+    location: {
+      type: String,
+      default: "",
+    },
+    eligibility: {
+      type: String,
+      default: "",
+    },
+    jobType: {
+      type: String,
+      default: "",
+    },
+    skills: {
+      type: String,
+      default: "",
+    },
+    salaryRange: {
+      type: String,
+      default: "",
+    },
+    description: {
+      type: String,
+      default: "",
+    },
+    applyLink: {
+      type: String,
+      default: "",
+    },
+    resourceLink: {
+      type: String,
+      default: "",
+    },
+    source: {
+      type: String,
+      default: "",
+    },
+
+// Public image URL (Cloudinary) - required before publishing
     imageUrl: {
+      type: String,
+      default: "",
+    },
+
+    // Public video URL (Cloudinary) - used for Reels
+    videoUrl: {
+      type: String,
+      default: "",
+    },
+
+    // Trending song attached to the Reel (from Instagram's licensed library)
+    audioName: {
       type: String,
       default: "",
     },
@@ -58,7 +125,7 @@ const postSchema = new mongoose.Schema(
       default: "",
     },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "Jobs-posts" }
 );
 
 module.exports = mongoose.model("Post", postSchema);

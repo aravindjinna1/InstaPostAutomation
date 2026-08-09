@@ -56,6 +56,46 @@ Backend for an automated Instagram poster that generates a daily image and capti
 - `GET /api/posts`
 - `GET /api/posts/:id`
 - `DELETE /api/posts/:id`
+- `GET /api/jobs` — list stored jobs (real apply links). Filter: `?company=`, `?role=`, `?link=`, `?all=true` (include unposted)
+- `GET /api/jobs/:id` — single job with its apply + resource link
+- `POST`/`GET /api/jobs/sync` — report live availability from external sources (no bulk-save)
+
+## Real-Time Job Data with Apply Links
+
+The pipeline no longer posts AI-hallucinated jobs. Each daily post now uses a
+**REAL job** fetched live from multiple free external job sources (no API key
+needed):
+
+- Indian MNC company boards (HCLTech, Razorpay, Groww, PhonePe, etc. via Greenhouse/Lever/Ashby/SmartRecruiters)
+- Remotive, Arbeitnow, Workday, iCIMS public feeds
+- Fallback to official company careers-page links for top Indian MNCs
+
+Each job carries an **actual apply link** (`applyLink`) plus a **resource/source
+link** (`resourceLink`) and full eligibility details, which are included directly
+in the Instagram caption so followers can apply immediately without commenting.
+
+### Where jobs are stored & how to access them
+
+Jobs are stored in a dedicated **`Job` MongoDB collection** (model:
+`src/models/Job.js`), indexed on **company**, **role**, and **applyLink** so you
+can look them up quickly by Company name, Role, or Job link. The published post
+also stores the full denormalized job content (see `Post` model).
+
+Search examples:
+
+```
+GET /api/jobs?company=PhonePe
+GET /api/jobs?role=Engineer
+GET /api/jobs?link=https://job-boards.greenhouse.io/phonepe/jobs/7799414003
+GET /api/jobs?all=true          # include not-yet-posted jobs
+```
+
+### Key new files
+
+- [`src/models/Job.js`](src/models/Job.js) — dedicated job storage model
+- [`src/services/jobDataService.js`](src/services/jobDataService.js) — live multi-source job fetching, ranking, dedup
+- [`src/controllers/jobController.js`](src/controllers/jobController.js) — `/api/jobs` endpoints
+- [`src/routes/jobRoutes.js`](src/routes/jobRoutes.js) — job API routes
 
 ## Key Files
 

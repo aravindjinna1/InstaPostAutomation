@@ -9,16 +9,21 @@ const logSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Which pipeline stage this log is about
+// Which pipeline stage this log is about
     stage: {
       type: String,
       enum: [
+        "job_generation",
         "caption_generation",
         "image_generation",
+        "poster_render",
         "image_upload",
+        "video_creation",
+        "video_upload",
         "media_container",
         "media_publish",
         "token_refresh",
+        "music_selection",
       ],
       required: true,
     },
