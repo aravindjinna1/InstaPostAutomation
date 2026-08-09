@@ -2,8 +2,8 @@ name: Daily Instagram Post
 
 on:
   schedule:
-    # 03:30 UTC = 9:00 AM IST — change to whatever local time you want
-    - cron: '30 3 * * *'
+    # every 2 hours
+    - cron: '0 */2 * * *'
   workflow_dispatch: {} # manual "Run workflow" button, for testing
 
 jobs:
