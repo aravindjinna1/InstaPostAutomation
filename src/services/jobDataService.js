@@ -38,8 +38,9 @@ const { getCompanyColors } = require("../utils/jobPrompts");
 // from JOBS_DB_NAME.JOBS_COLLECTION_NAME (env), e.g. JobsData_fromBlogs.New_Jobs.
 // This is SEPARATE from where the published Post records are stored
 // (database AutoInsta, collection Jobs-posts via the Post model).
-const JOBS_DB_NAME = process.env.JOBS_DB_NAME || process.env.MONGO_DB_NAME || "AutoInsta";
-const JOBS_COLLECTION_NAME = process.env.JOBS_COLLECTION_NAME || "jobs";
+const JOBS_DB_NAME = process.env.JOBS_DB_NAME || "JobsData_fromBlogs";
+// process.env.MONGO_DB_NAME
+const JOBS_COLLECTION_NAME = process.env.JOBS_COLLECTION_NAME || "New_Jobs";
 
 // ---------------------------------------------------------------------------
 // Source config
