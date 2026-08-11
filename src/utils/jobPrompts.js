@@ -133,6 +133,43 @@ const COMPANY_COLORS = {
   Myntra: { primary: "#FF3F6C", secondary: "#1B1B1B" },
 };
 
+// Ordered fallback themes for companies whose verified brand palette is not
+// available. Never shuffle this list: the posting pipeline persists the rank
+// it allocates, then wraps back to theme 1 after theme 20.
+const POSTER_THEMES = [
+  { rank: 1, name: "Royal Blue + Cyan + Navy", primary: "#2563EB", secondary: "#06B6D4", soft: "#EFF6FF" },
+  { rank: 2, name: "Black + Yellow + Navy", primary: "#111827", secondary: "#FACC15", soft: "#FFFBEA" },
+  { rank: 3, name: "Indigo + Electric Blue", primary: "#4F46E5", secondary: "#2563EB", soft: "#EEF2FF" },
+  { rank: 4, name: "Purple + Blue + Lavender", primary: "#7C3AED", secondary: "#3B82F6", soft: "#F5F3FF" },
+  { rank: 5, name: "Navy + Sky Blue", primary: "#1E3A8A", secondary: "#0EA5E9", soft: "#EFF6FF" },
+  { rank: 6, name: "Orange + Navy", primary: "#F97316", secondary: "#172554", soft: "#FFF7ED" },
+  { rank: 7, name: "Emerald + Royal Blue", primary: "#059669", secondary: "#2563EB", soft: "#ECFDF5" },
+  { rank: 8, name: "Cobalt + Violet", primary: "#2563EB", secondary: "#7C3AED", soft: "#EEF2FF" },
+  { rank: 9, name: "Teal + Navy", primary: "#0D9488", secondary: "#0F172A", soft: "#F0FDFA" },
+  { rank: 10, name: "Red + Black", primary: "#DC2626", secondary: "#111827", soft: "#FEF2F2" },
+  { rank: 11, name: "Blue + Orange", primary: "#2563EB", secondary: "#F97316", soft: "#EFF6FF" },
+  { rank: 12, name: "Purple + Pink", primary: "#9333EA", secondary: "#DB2777", soft: "#FAF5FF" },
+  { rank: 13, name: "Cyan + Deep Navy", primary: "#0891B2", secondary: "#0F172A", soft: "#ECFEFF" },
+  { rank: 14, name: "Emerald + Lime", primary: "#059669", secondary: "#84CC16", soft: "#F0FDF4" },
+  { rank: 15, name: "Indigo + Orange", primary: "#4F46E5", secondary: "#F97316", soft: "#EEF2FF" },
+  { rank: 16, name: "Blue + Emerald", primary: "#1D4ED8", secondary: "#10B981", soft: "#EFF6FF" },
+  { rank: 17, name: "Rose + Purple", primary: "#E11D48", secondary: "#7C3AED", soft: "#FFF1F2" },
+  { rank: 18, name: "Deep Green + Gold", primary: "#166534", secondary: "#CA8A04", soft: "#F0FDF4" },
+  { rank: 19, name: "Pink + Blue", primary: "#DB2777", secondary: "#2563EB", soft: "#FDF2F8" },
+  { rank: 20, name: "Slate + Cyan", primary: "#334155", secondary: "#0891B2", soft: "#F1F5F9" },
+];
+
+function getCompanyBrandColors(company) {
+  const normalized = String(company || "").trim().toLowerCase();
+  const matchedName = Object.keys(COMPANY_COLORS).find((name) => name.toLowerCase() === normalized);
+  return matchedName ? COMPANY_COLORS[matchedName] : null;
+}
+
+function getPosterTheme(rank) {
+  const index = ((Number(rank) || 1) - 1) % POSTER_THEMES.length;
+  return POSTER_THEMES[(index + POSTER_THEMES.length) % POSTER_THEMES.length];
+}
+
 /**
  * Returns a random company (service or product based).
  */
@@ -145,12 +182,10 @@ function pickCompany() {
  * Returns the branding colors for a company (with fallback).
  */
 function getCompanyColors(company) {
-  return (
-    COMPANY_COLORS[company] || {
+  return getCompanyBrandColors(company) || {
       primary: "#2874F0",
       secondary: "#1B1B1B",
-    }
-  );
+    };
 }
 
 /**
@@ -229,13 +264,13 @@ function buildJobImagePrompt(job) {
     : String(rawSkills).split(",").map((s) => s.trim());
   const skills = skillList.map((s) => s.toUpperCase()).filter(Boolean).slice(0, 9).join(", ");
   const salary = job.salaryRange || "Competitive package";
-  const colors = getCompanyColors(job.company);
+  const colors = job.posterTheme || getCompanyBrandColors(job.company) || getPosterTheme(1);
 
 // The prompt below is designed to instruct the AI image generator to create a high-quality, professional recruitment poster for Instagram Reels. It specifies the layout, branding
 
   return `Create a premium, modern, highly polished corporate recruitment poster for Instagram Reels. 9:16 vertical format, 1080x1920. It must look like it was made by a professional graphic designer for a Fortune 500 recruitment campaign. Clean white background with subtle dotted textures, rounded corners, smooth gradients, soft shadows, premium spacing. Leave safe margins (80-120px) at top and bottom. Trustworthy, modern, minimal, highly readable.
 
-BRAND COLORS: use the company theme colors for every major UI section, not only the top header. Base the design on the company primary and secondary brand colors provided, with white and subtle accent tones for contrast. Typography: modern geometric sans-serif (Poppins/Montserrat/Manrope), headings extra bold, uppercase.
+BRAND COLORS: use ONLY this approved palette for every colored UI section: primary ${colors.primary}, secondary ${colors.secondary}, soft container ${colors.soft || "#FFFFFF"}. The page background must remain pure white. Use high-contrast text/icons against each filled container. Do not invent, randomize, or substitute colors. Typography: modern geometric sans-serif (Poppins/Montserrat/Manrope), headings extra bold, uppercase.
 
 LAYOUT - sections top to bottom:
 1. HERO HEADER — top-left huge "WE ARE" (dark navy) and "HIRING!" (royal blue) on the next line, extremely large and bold, ~40% width. Top-right shows the company name "${company}" (professional, dark blue), then a large heading "${company.toUpperCase()} HIRING DRIVE" (dark navy, prominent), then a rounded royal blue pill with white text: "Posted ${today}".
@@ -258,8 +293,11 @@ module.exports = {
   SERVICE_COMPANIES,
   PRODUCT_COMPANIES,
   COMPANY_COLORS,
+  POSTER_THEMES,
   pickCompany,
   getCompanyColors,
+  getCompanyBrandColors,
+  getPosterTheme,
   buildJobGenerationPrompt,
   buildRealJobCaption,
   buildJobImagePrompt,

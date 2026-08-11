@@ -13,7 +13,7 @@ const { generateCaption, generateImage, generateImageWithGemini, generateJobPost
 const { uploadImageToCloudinary, uploadVideoToCloudinary } = require("../services/uploadService");
 const { postImageToInstagram, postReelToInstagram } = require("../services/instagramService");
 const { getDailyPrompt } = require("../utils/promptrotationdaily");
-const { buildRealJobCaption, buildJobImagePrompt } = require("../utils/jobPrompts");
+const { buildRealJobCaption, buildJobImagePrompt, getCompanyBrandColors, getPosterTheme } = require("../utils/jobPrompts");
 const { imageToReelVideo } = require("../services/videoService");
 const { pickRandomSong } = require("../utils/trendingMusic");
 const { renderJobPoster } = require("../services/posterService");
@@ -22,6 +22,39 @@ const { getNextJobForPosting } = require("../services/jobDataService");
 const Post = require("../models/Post");
 const Job = require("../models/Job");
 const Log = require("../models/Log");
+const PosterThemeState = require("../models/PosterThemeState");
+
+async function assignPosterTheme(postId, job) {
+  const brand = getCompanyBrandColors(job.company);
+  let theme;
+  let source;
+
+  if (brand) {
+    theme = { ...brand, name: `${job.company} brand colours` };
+    source = "brand";
+  } else {
+    // Atomic increment: allocation is always 1, 2, ... 20, 1, 2 ... and can
+    // never become random or repeat under concurrent pipeline requests.
+    const state = await PosterThemeState.findOneAndUpdate(
+      { key: "fallback-poster-theme" },
+      { $inc: { nextIndex: 1 } },
+      // On an upsert, $inc creates nextIndex as 1. Disabling defaults here
+      // avoids Mongo receiving a conflicting $setOnInsert for the same path.
+      { upsert: true, new: true, setDefaultsOnInsert: false }
+    );
+    theme = getPosterTheme(state.nextIndex);
+    source = "rotation";
+  }
+
+  if (postId) {
+    await Post.findByIdAndUpdate(postId, {
+      posterThemeRank: theme.rank || null,
+      posterThemeName: theme.name,
+      posterThemeSource: source,
+    });
+  }
+  return theme;
+}
 
 /**
  * Shared state passed between every node in the graph.
@@ -73,11 +106,13 @@ async function generateCaptionNode(state) {
     return { error: err, failedStage: "job_generation" };
   }
 
-  const caption = buildRealJobCaption(job);
+  const posterTheme = await assignPosterTheme(state.postId, job);
+  const themedJob = { ...job, posterTheme };
+  const caption = buildRealJobCaption(themedJob);
 
   await writeLog(state.postId, "job_generation", "success", `${job.role || ""} @ ${job.company || ""} (${job.applyLink || job.resourceLink || ""})`);
   await writeLog(state.postId, "caption_generation", "success", caption);
-  return { job, caption };
+  return { job: themedJob, caption };
 }
 
 /**

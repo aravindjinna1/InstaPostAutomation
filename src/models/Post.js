@@ -88,6 +88,12 @@ const postSchema = new mongoose.Schema(
       default: "",
     },
 
+    // Persisted visual palette used by this poster. Rotation themes advance
+    // in strict list order; recognized companies use their brand palette.
+    posterThemeRank: { type: Number, default: null },
+    posterThemeName: { type: String, default: "" },
+    posterThemeSource: { type: String, enum: ["rotation", "brand", ""], default: "" },
+
     // Returned by Instagram after creating the media container (step 1 of publish)
     igCreationId: {
       type: String,

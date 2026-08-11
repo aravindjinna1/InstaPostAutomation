@@ -953,6 +953,1070 @@
 
 
 
+// /**
+//  * Poster service — renders a poster that matches the provided Accenture-style
+//  * reference image: white header with a slanted purple building panel,
+//  * "WE ARE / HIRING!" headline, black "JOIN OUR TEAM" ribbon tag, a purple
+//  * role bar, a two-column info section (left: eligibility/experience/
+//  * location/job type cards, right: "WHY JOIN THIS TEAM?" panel), a purple
+//  * compensation banner, a "KEY SKILLS" row, a black "APPLY TODAY!" CTA
+//  * banner, and a purple footer bar.
+//  *
+//  * Layout uses a single running cursor (`y`) with named gap constants; every
+//  * section function takes a startY and returns the exact endY it drew to.
+//  */
+
+// const { createCanvas, loadImage } = require("@napi-rs/canvas");
+// let getCompanyColors;
+// try {
+//   // Optional — falls back to the Accenture purple theme if unavailable.
+//   ({ getCompanyColors } = require("../utils/jobPrompts"));
+// } catch (_) {
+//   getCompanyColors = () => ({});
+// }
+
+// const POSTER_WIDTH = 1080;
+// const POSTER_HEIGHT = 1920;
+// const PAD = 40;
+
+// // Reference palette (Accenture-style violet).
+// const PURPLE = "#6E1FD6";
+// const PURPLE_DARK = "#2C0A6E";
+// const PURPLE_LIGHT = "#9B4DFF";
+// const BLACK = "#0A0A10";
+// const WHITE = "#FFFFFF";
+// const YELLOW = "#FFD400";
+// const GREY_TEXT = "#5B6478";
+// const DIVIDER = "#E7E1F7";
+// const CARD_BG = "#FFFFFF";
+
+// const GAP = 16; // default breathing room between major sections
+
+// // ---------------------------------------------------------------------------
+// // Helpers
+// // ---------------------------------------------------------------------------
+// function roundedRect(ctx, x, y, w, h, r) {
+//   ctx.beginPath();
+//   ctx.moveTo(x + r, y);
+//   ctx.arcTo(x + w, y, x + w, y + h, r);
+//   ctx.arcTo(x + w, y + h, x, y + h, r);
+//   ctx.arcTo(x, y + h, x, y, r);
+//   ctx.arcTo(x, y, x + w, y, r);
+//   ctx.closePath();
+// }
+
+// function fillRoundedRect(ctx, x, y, w, h, r, color) {
+//   ctx.fillStyle = color;
+//   roundedRect(ctx, x, y, w, h, r);
+//   ctx.fill();
+// }
+
+// function strokeRoundedRect(ctx, x, y, w, h, r, color, width = 2) {
+//   ctx.strokeStyle = color;
+//   ctx.lineWidth = width;
+//   roundedRect(ctx, x, y, w, h, r);
+//   ctx.stroke();
+// }
+
+// function wrapText(ctx, value, maxWidth, maxLines = Infinity) {
+//   const words = String(value || "").trim().split(/\s+/);
+//   const lines = [];
+//   let current = "";
+//   for (const word of words) {
+//     const candidate = current ? `${current} ${word}` : word;
+//     if (ctx.measureText(candidate).width > maxWidth && current) {
+//       lines.push(current);
+//       current = word;
+//       if (lines.length >= maxLines) break;
+//     } else {
+//       current = candidate;
+//     }
+//   }
+//   if (lines.length < maxLines && current) lines.push(current);
+
+//   if (lines.length <= maxLines) return lines;
+
+//   const clipped = lines.slice(0, maxLines);
+//   let last = clipped[maxLines - 1];
+//   while (ctx.measureText(`${last}…`).width > maxWidth && last.length) {
+//     last = last.slice(0, -1);
+//   }
+//   clipped[maxLines - 1] = `${last.trim()}…`;
+//   return clipped;
+// }
+
+// function drawWrapped(ctx, text, x, y, maxWidth, lineHeight, maxLines, align = "left") {
+//   const lines = wrapText(ctx, text, maxWidth, maxLines);
+//   ctx.textAlign = align;
+//   lines.forEach((line, index) => ctx.fillText(line, x, y + index * lineHeight));
+//   return { lines: lines.length, height: lines.length * lineHeight };
+// }
+
+// function letterSpaced(ctx, text, x, y, spacing, align = "left") {
+//   const chars = String(text).split("");
+//   const widths = chars.map((c) => ctx.measureText(c).width + spacing);
+//   const total = widths.reduce((a, b) => a + b, 0) - spacing;
+//   let cursor = x;
+//   if (align === "center") cursor = x - total / 2;
+//   else if (align === "right") cursor = x - total;
+//   const prevAlign = ctx.textAlign;
+//   ctx.textAlign = "left";
+//   chars.forEach((c, i) => {
+//     ctx.fillText(c, cursor, y);
+//     cursor += widths[i];
+//   });
+//   ctx.textAlign = prevAlign;
+// }
+
+// // ---------------------------------------------------------------------------
+// // Icons
+// // ---------------------------------------------------------------------------
+// function drawIcon(ctx, kind, cx, cy, size, color) {
+//   const s = size;
+//   const lw = Math.max(3, Math.round(s * 0.13));
+//   ctx.strokeStyle = color;
+//   ctx.fillStyle = color;
+//   ctx.lineWidth = lw;
+//   ctx.lineCap = "round";
+//   ctx.lineJoin = "round";
+//   const x = cx - s / 2;
+//   const y = cy - s / 2;
+
+//   switch (kind) {
+//     case "person": {
+//       ctx.beginPath(); ctx.arc(cx, y + s * 0.32, s * 0.19, 0, Math.PI * 2); ctx.fill();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.14, y + s * 0.92); ctx.quadraticCurveTo(cx, y + s * 0.58, x + s * 0.86, y + s * 0.92); ctx.stroke();
+//       break;
+//     }
+//     case "pin": {
+//       ctx.beginPath(); ctx.arc(cx, y + s * 0.38, s * 0.19, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(cx, y + s * 0.38, s * 0.06, 0, Math.PI * 2); ctx.fill();
+//       ctx.beginPath(); ctx.moveTo(cx - s * 0.16, y + s * 0.52); ctx.lineTo(cx, y + s * 0.94); ctx.lineTo(cx + s * 0.16, y + s * 0.52); ctx.stroke();
+//       break;
+//     }
+//     case "briefcase": {
+//       ctx.strokeRect(x + s * 0.1, y + s * 0.32, s * 0.8, s * 0.56);
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.34, y + s * 0.32); ctx.lineTo(x + s * 0.34, y + s * 0.18); ctx.lineTo(x + s * 0.66, y + s * 0.18); ctx.lineTo(x + s * 0.66, y + s * 0.32); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.1, y + s * 0.58); ctx.lineTo(x + s * 0.9, y + s * 0.58); ctx.stroke();
+//       break;
+//     }
+//     case "clock": {
+//       ctx.beginPath(); ctx.arc(cx, cy, s * 0.4, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - s * 0.24); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + s * 0.18, cy + s * 0.08); ctx.stroke();
+//       break;
+//     }
+//     case "growth": {
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.08, y + s * 0.86); ctx.lineTo(x + s * 0.08, y + s * 0.1); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.08, y + s * 0.86); ctx.lineTo(x + s * 0.92, y + s * 0.86); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.18, y + s * 0.66); ctx.lineTo(x + s * 0.42, y + s * 0.4); ctx.lineTo(x + s * 0.58, y + s * 0.54); ctx.lineTo(x + s * 0.84, y + s * 0.24); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.62, y + s * 0.24); ctx.lineTo(x + s * 0.84, y + s * 0.24); ctx.lineTo(x + s * 0.84, y + s * 0.46); ctx.stroke();
+//       break;
+//     }
+//     case "gradcap": {
+//       ctx.beginPath(); ctx.moveTo(cx, y + s * 0.14); ctx.lineTo(x + s * 0.94, y + s * 0.4); ctx.lineTo(cx, y + s * 0.66); ctx.lineTo(x + s * 0.06, y + s * 0.4); ctx.closePath(); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.28, y + s * 0.48); ctx.lineTo(x + s * 0.28, y + s * 0.68); ctx.quadraticCurveTo(cx, y + s * 0.82, x + s * 0.72, y + s * 0.68); ctx.lineTo(x + s * 0.72, y + s * 0.48); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.9, y + s * 0.42); ctx.lineTo(x + s * 0.9, y + s * 0.7); ctx.stroke();
+//       break;
+//     }
+//     case "users": {
+//       ctx.beginPath(); ctx.arc(cx - s * 0.2, cy - s * 0.14, s * 0.15, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(cx + s * 0.2, cy - s * 0.14, s * 0.15, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.04, cy + s * 0.44); ctx.quadraticCurveTo(cx - s * 0.2, cy + s * 0.1, cx, cy + s * 0.22); ctx.quadraticCurveTo(cx + s * 0.2, cy + s * 0.1, x + s * 0.96, cy + s * 0.44); ctx.stroke();
+//       break;
+//     }
+//     case "globe": {
+//       ctx.beginPath(); ctx.arc(cx, cy, s * 0.4, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.ellipse(cx, cy, s * 0.18, s * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.1, cy); ctx.lineTo(x + s * 0.9, cy); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.2, cy - s * 0.22); ctx.lineTo(x + s * 0.8, cy - s * 0.22); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.2, cy + s * 0.22); ctx.lineTo(x + s * 0.8, cy + s * 0.22); ctx.stroke();
+//       break;
+//     }
+//     case "target": {
+//       ctx.beginPath(); ctx.arc(cx, cy, s * 0.42, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(cx, cy, s * 0.26, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(cx, cy, s * 0.1, 0, Math.PI * 2); ctx.fill();
+//       ctx.beginPath(); ctx.moveTo(cx + s * 0.5, cy - s * 0.5); ctx.lineTo(cx + s * 0.08, cy - s * 0.08); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(cx + s * 0.5, cy - s * 0.5); ctx.lineTo(cx + s * 0.5, cy - s * 0.22); ctx.moveTo(cx + s * 0.5, cy - s * 0.5); ctx.lineTo(cx + s * 0.22, cy - s * 0.5); ctx.stroke();
+//       break;
+//     }
+//     case "bell": {
+//       ctx.beginPath(); ctx.moveTo(cx, y + s * 0.06); ctx.lineTo(cx, y + s * 0.16); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(cx, y + s * 0.5, s * 0.32, Math.PI, 0); ctx.lineTo(x + s * 0.86, y + s * 0.78); ctx.lineTo(x + s * 0.14, y + s * 0.78); ctx.closePath(); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(cx, y + s * 0.88, s * 0.1, 0, Math.PI * 2); ctx.stroke();
+//       break;
+//     }
+//     case "share": {
+//       ctx.beginPath(); ctx.arc(x + s * 0.2, cy, s * 0.13, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(x + s * 0.82, y + s * 0.22, s * 0.13, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.arc(x + s * 0.82, y + s * 0.78, s * 0.13, 0, Math.PI * 2); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.3, cy - s * 0.06); ctx.lineTo(x + s * 0.72, y + s * 0.26); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.3, cy + s * 0.06); ctx.lineTo(x + s * 0.72, y + s * 0.74); ctx.stroke();
+//       break;
+//     }
+//     case "megaphone": {
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.06, y + s * 0.36); ctx.lineTo(x + s * 0.06, y + s * 0.6); ctx.lineTo(x + s * 0.24, y + s * 0.6); ctx.lineTo(x + s * 0.6, y + s * 0.86); ctx.lineTo(x + s * 0.6, y + s * 0.1); ctx.lineTo(x + s * 0.24, y + s * 0.36); ctx.closePath(); ctx.fill();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.6, y + s * 0.22); ctx.quadraticCurveTo(x + s * 0.94, y + s * 0.48, x + s * 0.6, y + s * 0.74); ctx.stroke();
+//       ctx.beginPath(); ctx.moveTo(x + s * 0.18, y + s * 0.62); ctx.lineTo(x + s * 0.14, y + s * 0.88); ctx.lineTo(x + s * 0.3, y + s * 0.88); ctx.lineTo(x + s * 0.28, y + s * 0.62); ctx.fill();
+//       break;
+//     }
+//     case "star": {
+//       ctx.beginPath();
+//       for (let i = 0; i < 5; i++) {
+//         const angle = -Math.PI / 2 + (i * 4 * Math.PI) / 5;
+//         const px = cx + Math.cos(angle) * s * 0.42;
+//         const py = cy + Math.sin(angle) * s * 0.42;
+//         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+//       }
+//       ctx.closePath();
+//       ctx.fill();
+//       break;
+//     }
+//     default: {
+//       ctx.beginPath(); ctx.arc(cx, cy, s * 0.3, 0, Math.PI * 2); ctx.stroke();
+//     }
+//   }
+// }
+
+// function drawSquareIcon(ctx, kind, cx, cy, size, bgColor) {
+//   const r = 14;
+//   ctx.save();
+//   ctx.shadowColor = "rgba(110,31,214,0.30)";
+//   ctx.shadowBlur = 10;
+//   ctx.shadowOffsetY = 4;
+//   fillRoundedRect(ctx, cx - size / 2, cy - size / 2, size, size, r, bgColor);
+//   ctx.restore();
+//   drawIcon(ctx, kind, cx, cy, size * 0.52, WHITE);
+// }
+
+// function drawCircleIcon(ctx, kind, cx, cy, size, bgColor) {
+//   ctx.save();
+//   ctx.shadowColor = "rgba(110,31,214,0.30)";
+//   ctx.shadowBlur = 10;
+//   ctx.shadowOffsetY = 4;
+//   ctx.beginPath();
+//   ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+//   ctx.fillStyle = bgColor;
+//   ctx.fill();
+//   ctx.restore();
+//   drawIcon(ctx, kind, cx, cy, size * 0.52, WHITE);
+// }
+
+// // ---------------------------------------------------------------------------
+// // Theme resolution — defaults to Accenture purple to match the reference.
+// // ---------------------------------------------------------------------------
+// function resolveTheme(job) {
+//   let colors = {};
+//   try {
+//     colors = getCompanyColors(job.company) || {};
+//   } catch (_) {
+//     colors = {};
+//   }
+//   return {
+//     primary: colors.primary || PURPLE,
+//     dark: colors.secondary || PURPLE_DARK,
+//     light: colors.light || PURPLE_LIGHT,
+//   };
+// }
+
+// // ---------------------------------------------------------------------------
+// // Background
+// // ---------------------------------------------------------------------------
+// function drawBackground(ctx) {
+//   ctx.fillStyle = WHITE;
+//   ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
+// }
+
+// function drawDotGrid(ctx, x, y, cols, rows, spacing, radius, color) {
+//   ctx.fillStyle = color;
+//   for (let r = 0; r < rows; r++) {
+//     for (let c = 0; c < cols; c++) {
+//       ctx.beginPath();
+//       ctx.arc(x + c * spacing, y + r * spacing, radius, 0, Math.PI * 2);
+//       ctx.fill();
+//     }
+//   }
+// }
+
+// // ---------------------------------------------------------------------------
+// // 1. Header — logo, WE ARE / HIRING!, slanted building panel, JOIN OUR TEAM
+// //    ribbon, role bar, eligibility line. Returns bottom Y.
+// // ---------------------------------------------------------------------------
+// async function drawHeader(ctx, job, bgImage, startY, theme) {
+//   const company = String(job.company || "Accenture").replace(" India", "");
+//   const role = String(job.title || job.role || "OPEN ROLE").toUpperCase();
+//   const eligibilityLine = job.eligibilityLine || "FRESHERS & EARLY-CAREER TALENT WELCOME";
+
+//   // Small reel-safe top margin so nothing sits flush against the very top
+//   // edge (where Instagram/Reels UI chrome usually overlaps).
+//   const y = startY;
+
+//   // --- WE ARE / HIRING! (pushed to the top) -------------------------------
+//   ctx.textAlign = "left";
+//   ctx.fillStyle = BLACK;
+//   ctx.font = "900 76px 'Arial Black', Arial, sans-serif";
+//   ctx.fillText("WE ARE", PAD, y + 78);
+
+//   ctx.save();
+//   ctx.shadowColor = "rgba(110,31,214,0.35)";
+//   ctx.shadowBlur = 14;
+//   ctx.shadowOffsetY = 6;
+//   ctx.fillStyle = theme.primary;
+//   ctx.font = "900 106px 'Arial Black', Arial, sans-serif";
+//   ctx.fillText("HIRING!", PAD, y + 196);
+//   ctx.restore();
+
+//   // --- Company name (big, highlighted, right under HIRING!) --------------
+//   ctx.font = "900 72px 'Arial Black', Arial, sans-serif";
+//   const companyDisplay = company;
+//   const companyWidth = ctx.measureText(companyDisplay).width;
+//   const companyBoxY = y + 224;
+
+//   ctx.save();
+//   ctx.translate(PAD - 8, companyBoxY);
+//   ctx.rotate(-0.02);
+//   fillRoundedRect(ctx, 0, 0, companyWidth + 30, 58, 10, "rgba(255,212,0,0.6)");
+//   ctx.restore();
+
+//   ctx.fillStyle = BLACK;
+//   ctx.fillText(companyDisplay, PAD, companyBoxY + 46);
+
+//   ctx.fillStyle = theme.primary;
+//   ctx.font = "800 19px Arial, sans-serif";
+//   letterSpaced(ctx, "CAREERS", PAD, companyBoxY + 80, 3, "left");
+
+//   // decorative dot grid, upper area
+//   drawDotGrid(ctx, 470, y - 4, 8, 6, 21, 3, "rgba(110,31,214,0.35)");
+
+//   // --- JOIN OUR TEAM ribbon ----------------------------------------------
+//   const tagY = companyBoxY + 110;
+//   const tagH = 54;
+//   const tagText = "JOIN OUR TEAM";
+//   ctx.font = "800 24px Arial, sans-serif";
+//   const tagTextW = ctx.measureText(tagText).width;
+//   const tagW = tagTextW + 100;
+//   ctx.save();
+//   ctx.beginPath();
+//   ctx.moveTo(PAD, tagY);
+//   ctx.lineTo(PAD + tagW, tagY);
+//   ctx.lineTo(PAD + tagW - 22, tagY + tagH);
+//   ctx.lineTo(PAD, tagY + tagH);
+//   ctx.closePath();
+//   ctx.fillStyle = BLACK;
+//   ctx.fill();
+//   ctx.restore();
+//   ctx.fillStyle = theme.primary;
+//   ctx.font = "900 26px Arial, sans-serif";
+//   ctx.fillText("\u203A", PAD + 22, tagY + tagH / 2 + 10);
+//   ctx.fillStyle = WHITE;
+//   ctx.font = "800 24px Arial, sans-serif";
+//   ctx.fillText(tagText, PAD + 54, tagY + tagH / 2 + 8);
+
+//   // --- Slanted building panel (right side) — stretches from just below
+//   //     the top margin all the way down to the JOIN OUR TEAM ribbon, so
+//   //     there's no dead space beneath it. -----------------------------
+//   const rightEdge = POSTER_WIDTH - PAD;
+//   const panelTop = y - 12;
+//   const panelBottom = tagY - 16;
+//   const panelXTop = 590;
+//   const panelXBottom = 480;
+
+//   ctx.save();
+//   ctx.beginPath();
+//   ctx.moveTo(panelXTop, panelTop);
+//   ctx.lineTo(rightEdge, panelTop);
+//   ctx.lineTo(rightEdge, panelBottom);
+//   ctx.lineTo(panelXBottom, panelBottom);
+//   ctx.closePath();
+//   ctx.clip();
+
+//   if (bgImage) {
+//     const pw = rightEdge - Math.min(panelXTop, panelXBottom);
+//     const ph = panelBottom - panelTop;
+//     const px = Math.min(panelXTop, panelXBottom);
+//     const scale = Math.max(pw / bgImage.width, ph / bgImage.height);
+//     const dw = bgImage.width * scale;
+//     const dh = bgImage.height * scale;
+//     ctx.drawImage(bgImage, px + (pw - dw) / 2, panelTop + (ph - dh) / 2, dw, dh);
+//     const tint = ctx.createLinearGradient(0, panelTop, 0, panelBottom);
+//     tint.addColorStop(0, "rgba(46,10,110,0.35)");
+//     tint.addColorStop(1, "rgba(20,4,56,0.55)");
+//     ctx.fillStyle = tint;
+//     ctx.fillRect(panelXBottom - 40, panelTop, rightEdge - panelXBottom + 40, panelBottom - panelTop);
+//   } else {
+//     const g = ctx.createLinearGradient(panelXTop, panelTop, rightEdge, panelBottom);
+//     g.addColorStop(0, theme.light);
+//     g.addColorStop(1, theme.dark);
+//     ctx.fillStyle = g;
+//     ctx.fillRect(panelXBottom - 40, panelTop, rightEdge - panelXBottom + 40, panelBottom - panelTop);
+
+//     // simple building silhouette
+//     const buildX = panelXTop + 30;
+//     const buildW = rightEdge - buildX - 20;
+//     const buildTop = panelTop + 140;
+//     const buildBottom = panelBottom - 10;
+//     ctx.fillStyle = "rgba(10,4,30,0.55)";
+//     fillRoundedRect(ctx, buildX, buildTop, buildW, buildBottom - buildTop, 4);
+//     // lit windows grid
+//     const winCols = 5;
+//     const winRows = Math.max(6, Math.round((buildBottom - buildTop) / 46));
+//     const winPadX = 14;
+//     const winPadY = 16;
+//     const cellW = (buildW - winPadX * 2) / winCols;
+//     const cellH = (buildBottom - buildTop - winPadY * 2) / winRows;
+//     for (let r = 0; r < winRows; r++) {
+//       for (let c = 0; c < winCols; c++) {
+//         const lit = (r + c) % 3 !== 0;
+//         ctx.fillStyle = lit ? "rgba(255,212,0,0.55)" : "rgba(255,255,255,0.08)";
+//         ctx.fillRect(
+//           buildX + winPadX + c * cellW + 3,
+//           buildTop + winPadY + r * cellH + 3,
+//           cellW - 6,
+//           cellH - 6
+//         );
+//       }
+//     }
+//     // small logo plate on the building
+//     ctx.fillStyle = "rgba(10,4,30,0.75)";
+//     fillRoundedRect(ctx, buildX + buildW * 0.5 - 60, buildTop - 34, 120, 28, 6);
+//     ctx.fillStyle = WHITE;
+//     ctx.font = "700 15px Arial, sans-serif";
+//     ctx.textAlign = "center";
+//     ctx.fillText(company.toLowerCase(), buildX + buildW * 0.5, buildTop - 15);
+//     ctx.textAlign = "left";
+//   }
+
+//   // decorative dot grids over the panel (top + bottom corners)
+//   drawDotGrid(ctx, panelXTop + 40, panelTop + 10, 8, 5, 22, 3, "rgba(255,255,255,0.5)");
+//   drawDotGrid(ctx, rightEdge - 190, panelBottom - 70, 8, 4, 22, 3, "rgba(255,255,255,0.35)");
+//   ctx.restore();
+
+//   ctx.textAlign = "left";
+
+//   // --- Role bar ------------------------------------------------------------
+//   const barY = tagY + tagH + 12;
+//   const barH = 72;
+//   const barW = rightEdge - PAD;
+//   const barGrad = ctx.createLinearGradient(PAD, barY, PAD + barW, barY);
+//   barGrad.addColorStop(0, theme.primary);
+//   barGrad.addColorStop(1, theme.dark);
+//   ctx.save();
+//   ctx.shadowColor = "rgba(46,10,110,0.35)";
+//   ctx.shadowBlur = 16;
+//   ctx.shadowOffsetY = 6;
+//   fillRoundedRect(ctx, PAD, barY, barW, barH, 16, barGrad);
+//   ctx.restore();
+//   ctx.fillStyle = WHITE;
+//   ctx.textAlign = "center";
+//   ctx.font = "900 40px 'Arial Black', Arial, sans-serif";
+//   const roleLines = wrapText(ctx, role, barW - 60, 1);
+//   ctx.fillText(roleLines[0], POSTER_WIDTH / 2, barY + barH / 2 + 14);
+
+//   // --- Eligibility subtitle -------------------------------------------------
+//   const subY = barY + barH + 32;
+//   ctx.font = "700 18px Arial, sans-serif";
+//   ctx.fillStyle = GREY_TEXT;
+//   const subText = eligibilityLine.toUpperCase();
+//   const subW = ctx.measureText(subText).width;
+//   ctx.fillText(subText, POSTER_WIDTH / 2, subY);
+//   ctx.strokeStyle = theme.primary;
+//   ctx.lineWidth = 2;
+//   ctx.beginPath();
+//   ctx.moveTo(POSTER_WIDTH / 2 - subW / 2 - 40, subY - 6);
+//   ctx.lineTo(POSTER_WIDTH / 2 - subW / 2 - 12, subY - 6);
+//   ctx.stroke();
+//   ctx.beginPath();
+//   ctx.moveTo(POSTER_WIDTH / 2 + subW / 2 + 12, subY - 6);
+//   ctx.lineTo(POSTER_WIDTH / 2 + subW / 2 + 40, subY - 6);
+//   ctx.stroke();
+//   ctx.textAlign = "left";
+
+//   return subY + 20;
+// }
+
+// // ---------------------------------------------------------------------------
+// // 2. Two-column info section — left info cards, right "why join" panel.
+// //    Returns bottom Y.
+// // ---------------------------------------------------------------------------
+// function drawTwoColumnSection(ctx, job, startY, theme) {
+//   const totalW = POSTER_WIDTH - PAD * 2;
+//   const colGap = 24;
+//   const colW = (totalW - colGap) / 2;
+//   const leftX = PAD;
+//   const rightX = PAD + colW + colGap;
+
+//   // ---- Left column: info cards ----
+//   const infoRows = [
+//     { icon: "person", label: "ELIGIBILITY", value: job.eligibility || "Freshers / recent graduates" },
+//     { icon: "briefcase", label: "EXPERIENCE", value: job.experience || "Freshers (0-2 years)" },
+//     { icon: "pin", label: "LOCATION", value: job.location || "India" },
+//     { icon: "clock", label: "JOB TYPE", value: job.jobType || "Full-time / Hybrid" },
+//   ];
+//   const rowH = 92;
+//   const rowGap = 14;
+//   let cy = startY;
+//   infoRows.forEach((row) => {
+//     ctx.save();
+//     ctx.shadowColor = "rgba(20,10,50,0.08)";
+//     ctx.shadowBlur = 14;
+//     fillRoundedRect(ctx, leftX, cy, colW, rowH, 18, CARD_BG);
+//     ctx.restore();
+//     // thin purple accent line on the right inner edge
+//     ctx.strokeStyle = "rgba(110,31,214,0.25)";
+//     ctx.lineWidth = 2;
+//     ctx.beginPath();
+//     ctx.moveTo(leftX + colW - 18, cy + 16);
+//     ctx.lineTo(leftX + colW - 18, cy + rowH - 16);
+//     ctx.stroke();
+
+//     drawSquareIcon(ctx, row.icon, leftX + 52, cy + rowH / 2, 60, theme.primary);
+
+//     ctx.fillStyle = theme.primary;
+//     ctx.font = "800 17px Arial, sans-serif";
+//     ctx.textAlign = "left";
+//     ctx.fillText(row.label, leftX + 100, cy + 34);
+
+//     ctx.fillStyle = BLACK;
+//     ctx.font = "900 24px 'Arial Black', Arial, sans-serif";
+//     drawWrapped(ctx, row.value, leftX + 100, cy + 66, colW - 130, 26, 2, "left");
+
+//     cy += rowH + rowGap;
+//   });
+//   const leftBottom = cy - rowGap;
+
+//   // ---- Right column: "WHY JOIN THIS TEAM?" panel ----
+//   const benefits = Array.isArray(job.benefits) && job.benefits.length
+//     ? job.benefits.slice(0, 4).map((b) =>
+//         typeof b === "string"
+//           ? { icon: "growth", title: b, sub: "" }
+//           : { icon: b.icon || "growth", title: b.title || b.text || "", sub: b.sub || b.subtitle || "" }
+//       )
+//     : [
+//         { icon: "growth", title: "CAREER GROWTH", sub: "Build a meaningful career" },
+//         { icon: "gradcap", title: "LEARN & UPSKILL", sub: "Work with modern tools" },
+//         { icon: "users", title: "INCLUSIVE CULTURE", sub: "People-first workplace" },
+//         { icon: "globe", title: "GLOBAL IMPACT", sub: "Projects that matter" },
+//       ];
+
+//   const headerH = 74;
+//   const benefitRowH = (leftBottom - startY - headerH) / benefits.length;
+
+//   ctx.save();
+//   ctx.shadowColor = "rgba(20,10,50,0.1)";
+//   ctx.shadowBlur = 16;
+//   fillRoundedRect(ctx, rightX, startY, colW, leftBottom - startY, 20, CARD_BG);
+//   ctx.restore();
+
+//   const headerGrad = ctx.createLinearGradient(rightX, startY, rightX + colW, startY);
+//   headerGrad.addColorStop(0, theme.primary);
+//   headerGrad.addColorStop(1, theme.dark);
+//   ctx.save();
+//   roundedRect(ctx, rightX, startY, colW, headerH, 20);
+//   ctx.clip();
+//   ctx.fillStyle = headerGrad;
+//   ctx.fillRect(rightX, startY, colW, headerH);
+//   ctx.restore();
+
+//   ctx.fillStyle = WHITE;
+//   ctx.font = "800 21px Arial, sans-serif";
+//   ctx.textAlign = "center";
+//   ctx.fillText("WHY JOIN THIS TEAM?", rightX + colW / 2, startY + 32);
+//   ctx.fillStyle = YELLOW;
+//   for (let i = 0; i < 4; i++) {
+//     ctx.beginPath();
+//     const sx = rightX + colW / 2 - 46 + i * 30;
+//     drawIcon(ctx, "star", sx, startY + 54, 14, YELLOW);
+//   }
+
+//   let by = startY + headerH;
+//   benefits.forEach((b, i) => {
+//     drawCircleIcon(ctx, b.icon, rightX + 44, by + benefitRowH / 2, 48, theme.primary);
+//     ctx.fillStyle = BLACK;
+//     ctx.font = "800 19px 'Arial Black', Arial, sans-serif";
+//     ctx.textAlign = "left";
+//     ctx.fillText(b.title, rightX + 82, by + benefitRowH / 2 - 4);
+//     ctx.fillStyle = GREY_TEXT;
+//     ctx.font = "600 15px Arial, sans-serif";
+//     ctx.fillText(b.sub, rightX + 82, by + benefitRowH / 2 + 18);
+
+//     if (i < benefits.length - 1) {
+//       ctx.strokeStyle = DIVIDER;
+//       ctx.lineWidth = 1.5;
+//       ctx.beginPath();
+//       ctx.moveTo(rightX + 20, by + benefitRowH);
+//       ctx.lineTo(rightX + colW - 20, by + benefitRowH);
+//       ctx.stroke();
+//     }
+//     by += benefitRowH;
+//   });
+
+//   return leftBottom;
+// }
+
+// // ---------------------------------------------------------------------------
+// // 3. Compensation banner — returns bottom Y
+// // ---------------------------------------------------------------------------
+// function drawCompensation(ctx, startY, job, theme) {
+//   const w = POSTER_WIDTH - PAD * 2;
+//   const h = 132;
+//   const x = PAD;
+//   const y = startY;
+
+//   const g = ctx.createLinearGradient(x, y, x + w, y + h);
+//   g.addColorStop(0, theme.primary);
+//   g.addColorStop(1, theme.dark);
+//   ctx.save();
+//   ctx.shadowColor = "rgba(46,10,110,0.35)";
+//   ctx.shadowBlur = 18;
+//   ctx.shadowOffsetY = 6;
+//   fillRoundedRect(ctx, x, y, w, h, 20, g);
+//   ctx.restore();
+
+//   drawDotGrid(ctx, x + 30, y + 32, 3, 4, 18, 3, "rgba(255,255,255,0.35)");
+//   drawDotGrid(ctx, x + w - 66, y + 32, 3, 4, 18, 3, "rgba(255,255,255,0.35)");
+
+//   ctx.fillStyle = "rgba(255,255,255,0.9)";
+//   ctx.textAlign = "center";
+//   ctx.font = "700 20px Arial, sans-serif";
+//   letterSpaced(ctx, "\u2014  COMPENSATION PACKAGE  \u2014", POSTER_WIDTH / 2, y + 42, 2, "center");
+
+//   const comp = job.salaryRange || job.compensation || "INR 3.5-6 LPA";
+//   const parts = String(comp).match(/^([A-Za-z]*\s*)([\d.\-–\s]+)(\s*[A-Za-z]*)$/);
+//   ctx.font = "900 58px 'Arial Black', Arial, sans-serif";
+//   if (parts) {
+//     const [, pre, mid, post] = parts;
+//     const midClean = mid.trim().replace(/-/g, " - ");
+//     const preW = ctx.measureText(pre.trim()).width;
+//     const midW = ctx.measureText(midClean).width;
+//     const postW = ctx.measureText(post.trim()).width;
+//     const gap = 16;
+//     const total = preW + midW + postW + gap * 2;
+//     let cx = POSTER_WIDTH / 2 - total / 2;
+//     ctx.textAlign = "left";
+//     ctx.fillStyle = WHITE;
+//     ctx.fillText(pre.trim(), cx, y + 106);
+//     cx += preW + gap;
+//     ctx.fillStyle = YELLOW;
+//     ctx.fillText(midClean, cx, y + 106);
+//     cx += midW + gap;
+//     ctx.fillStyle = WHITE;
+//     ctx.fillText(post.trim(), cx, y + 106);
+//     ctx.textAlign = "center";
+//   } else {
+//     ctx.fillStyle = WHITE;
+//     ctx.fillText(comp, POSTER_WIDTH / 2, y + 106);
+//   }
+
+//   return y + h;
+// }
+
+// // ---------------------------------------------------------------------------
+// // 4. Key skills — bigger, eye-catching bulleted grid (each skill as its own
+// //    row with a filled disc bullet), generous spacing between items.
+// //    Returns bottom Y.
+// // ---------------------------------------------------------------------------
+// function drawKeySkills(ctx, startY, job, theme) {
+//   const w = POSTER_WIDTH - PAD * 2;
+//   const x = PAD;
+//   const y = startY;
+
+//   const rawSkills = Array.isArray(job.skills)
+//     ? job.skills
+//     : typeof job.skills === "string" && job.skills.trim()
+//       ? job.skills.split(",").map((s) => s.trim()).filter(Boolean)
+//       : ["Communication", "Problem solving", "Content review", "Attention to detail"];
+
+//   const titleH = 60;
+//   const itemGapY = 20; // extra breathing room between each skill row
+//   const itemH = 50;
+//   const cols = 2;
+//   const rows = Math.ceil(rawSkills.length / cols);
+//   const colGap = 20;
+//   const colW = (w - 48 - colGap) / cols;
+//   const bodyH = rows * itemH + (rows - 1) * itemGapY;
+//   const h = titleH + bodyH + 40;
+
+//   ctx.save();
+//   ctx.shadowColor = "rgba(20,10,50,0.1)";
+//   ctx.shadowBlur = 16;
+//   fillRoundedRect(ctx, x, y, w, h, 22, CARD_BG);
+//   ctx.restore();
+
+//   drawCircleIcon(ctx, "target", x + 54, y + titleH / 2 + 10, 52, theme.primary);
+//   ctx.fillStyle = theme.primary;
+//   ctx.font = "900 26px 'Arial Black', Arial, sans-serif";
+//   ctx.textAlign = "left";
+//   ctx.fillText("KEY SKILLS", x + 96, y + titleH / 2 + 20);
+
+//   ctx.strokeStyle = DIVIDER;
+//   ctx.lineWidth = 1.5;
+//   ctx.beginPath();
+//   ctx.moveTo(x + 24, y + titleH + 4);
+//   ctx.lineTo(x + w - 24, y + titleH + 4);
+//   ctx.stroke();
+
+//   rawSkills.forEach((skill, i) => {
+//     const col = i % cols;
+//     const row = Math.floor(i / cols);
+//     const ix = x + 24 + col * (colW + colGap);
+//     const iy = y + titleH + 20 + row * (itemH + itemGapY);
+
+//     ctx.save();
+//     ctx.globalAlpha = 0.07;
+//     fillRoundedRect(ctx, ix, iy, colW, itemH, 14, theme.primary);
+//     ctx.restore();
+//     strokeRoundedRect(ctx, ix, iy, colW, itemH, 14, "rgba(110,31,214,0.18)", 1.5);
+
+//     ctx.save();
+//     ctx.shadowColor = "rgba(110,31,214,0.4)";
+//     ctx.shadowBlur = 6;
+//     ctx.beginPath();
+//     ctx.arc(ix + 26, iy + itemH / 2, 9, 0, Math.PI * 2);
+//     ctx.fillStyle = theme.primary;
+//     ctx.fill();
+//     ctx.restore();
+//     ctx.beginPath();
+//     ctx.arc(ix + 26, iy + itemH / 2, 3.5, 0, Math.PI * 2);
+//     ctx.fillStyle = YELLOW;
+//     ctx.fill();
+
+//     ctx.fillStyle = BLACK;
+//     ctx.font = "700 19px Arial, sans-serif";
+//     ctx.textAlign = "left";
+//     drawWrapped(ctx, skill, ix + 48, iy + itemH / 2 + 7, colW - 64, 20, 1, "left");
+//   });
+
+//   return y + h;
+// }
+
+// // ---------------------------------------------------------------------------
+// // 5. CTA banner — black, with purple accent + megaphone. Returns bottom Y.
+// // ---------------------------------------------------------------------------
+// function drawCtaBanner(ctx, startY, theme) {
+//   const bW = POSTER_WIDTH - PAD * 2;
+//   const bH = 214;
+//   const bX = PAD;
+//   const bY = startY;
+
+//   ctx.save();
+//   ctx.shadowColor = "rgba(0,0,0,0.35)";
+//   ctx.shadowBlur = 20;
+//   ctx.shadowOffsetY = 8;
+//   fillRoundedRect(ctx, bX, bY, bW, bH, 24, BLACK);
+//   ctx.restore();
+
+//   // purple diagonal accent, top-left corner
+//   ctx.save();
+//   roundedRect(ctx, bX, bY, bW, bH, 24);
+//   ctx.clip();
+//   const accentGrad = ctx.createLinearGradient(bX, bY, bX + 220, bY + bH);
+//   accentGrad.addColorStop(0, theme.primary);
+//   accentGrad.addColorStop(1, "rgba(110,31,214,0)");
+//   ctx.fillStyle = accentGrad;
+//   ctx.beginPath();
+//   ctx.moveTo(bX, bY);
+//   ctx.lineTo(bX + 220, bY);
+//   ctx.lineTo(bX, bY + bH);
+//   ctx.closePath();
+//   ctx.fill();
+//   ctx.restore();
+
+//   const cx = bX + bW / 2;
+//   ctx.textAlign = "center";
+
+//   ctx.font = "700 19px Arial, sans-serif";
+//   ctx.fillStyle = "rgba(255,255,255,0.85)";
+//   letterSpaced(ctx, "\u2014  INTERESTED CANDIDATES  \u2014", cx, bY + 40, 2, "center");
+
+//   ctx.font = "900 60px 'Arial Black', Arial, sans-serif";
+//   ctx.textAlign = "left";
+//   const applyW = ctx.measureText("APPLY ").width;
+//   const todayW = ctx.measureText("TODAY!").width;
+//   let ax = cx - (applyW + todayW) / 2;
+//   ctx.fillStyle = WHITE;
+//   ctx.fillText("APPLY ", ax, bY + 100);
+//   ax += applyW;
+//   ctx.fillStyle = YELLOW;
+//   ctx.fillText("TODAY!", ax, bY + 100);
+//   ctx.textAlign = "center";
+
+//   // pill button
+//   const pillText = "COMMENT \u201CAPPLY\u201D FOR THE LINK";
+//   ctx.font = "800 19px Arial, sans-serif";
+//   const pillTextW = ctx.measureText(pillText).width;
+//   const pillW = pillTextW + 90;
+//   const pillH = 52;
+//   const pillX = cx - pillW / 2;
+//   const pillY = bY + 130;
+//   const pillGrad = ctx.createLinearGradient(pillX, pillY, pillX + pillW, pillY);
+//   pillGrad.addColorStop(0, theme.primary);
+//   pillGrad.addColorStop(1, theme.dark);
+//   fillRoundedRect(ctx, pillX, pillY, pillW, pillH, 26, pillGrad);
+//   drawIcon(ctx, "megaphone", pillX + 36, pillY + pillH / 2, 26, WHITE);
+//   ctx.textAlign = "left";
+//   ctx.font = "800 19px Arial, sans-serif";
+//   let px = pillX + 60;
+//   const segs = pillText.split("APPLY");
+//   ctx.fillStyle = WHITE;
+//   ctx.fillText(segs[0], px, pillY + pillH / 2 + 7);
+//   px += ctx.measureText(segs[0]).width;
+//   ctx.fillStyle = YELLOW;
+//   ctx.fillText("APPLY", px, pillY + pillH / 2 + 7);
+//   px += ctx.measureText("APPLY").width;
+//   ctx.fillStyle = WHITE;
+//   ctx.fillText(segs[1], px, pillY + pillH / 2 + 7);
+//   ctx.textAlign = "left";
+
+//   return bY + bH;
+// }
+
+// // ---------------------------------------------------------------------------
+// // 6. Footer — purple bar with bell + follow text, share + save text.
+// // ---------------------------------------------------------------------------
+// const FOOTER_HEIGHT = 118;
+
+// function drawFooter(ctx, startY, job, theme) {
+//   const fY = startY;
+//   const fH = FOOTER_HEIGHT;
+//   const g = ctx.createLinearGradient(PAD, fY, POSTER_WIDTH - PAD, fY);
+//   g.addColorStop(0, theme.primary);
+//   g.addColorStop(1, theme.dark);
+//   fillRoundedRect(ctx, PAD, fY, POSTER_WIDTH - PAD * 2, fH, 20, g);
+
+//   const midX = POSTER_WIDTH / 2;
+//   ctx.strokeStyle = "rgba(255,255,255,0.35)";
+//   ctx.lineWidth = 2;
+//   ctx.beginPath();
+//   ctx.moveTo(midX, fY + 22);
+//   ctx.lineTo(midX, fY + fH - 22);
+//   ctx.stroke();
+
+//   // Left: bell + follow text
+//   const leftCx = PAD + (midX - PAD) / 2;
+//   drawIcon(ctx, "bell", PAD + 70, fY + fH / 2, 30, WHITE);
+//   ctx.textAlign = "left";
+//   ctx.font = "800 18px Arial, sans-serif";
+//   ctx.fillStyle = WHITE;
+//   ctx.fillText("FOLLOW FOR DAILY", PAD + 106, fY + fH / 2 - 6);
+//   ctx.fillStyle = YELLOW;
+//   ctx.fillText("VERIFIED", PAD + 106, fY + fH / 2 + 20);
+//   ctx.fillStyle = WHITE;
+//   ctx.fillText(" JOB UPDATES", PAD + 106 + ctx.measureText("VERIFIED").width, fY + fH / 2 + 20);
+
+//   // Right: share + save text
+//   drawIcon(ctx, "share", midX + 64, fY + fH / 2, 28, WHITE);
+//   ctx.fillStyle = WHITE;
+//   ctx.font = "800 18px Arial, sans-serif";
+//   ctx.fillText("SAVE & SHARE", midX + 98, fY + fH / 2 - 6);
+//   ctx.fillText("WITH YOUR FRIENDS", midX + 98, fY + fH / 2 + 20);
+// }
+
+// // ---------------------------------------------------------------------------
+// // Main entry point
+// // ---------------------------------------------------------------------------
+// async function renderJobPoster({ backgroundBuffer, job }) {
+//   try {
+//     let bgImage = null;
+//     if (backgroundBuffer) {
+//       try {
+//         bgImage = await loadImage(backgroundBuffer);
+//       } catch (_) {
+//         bgImage = null;
+//       }
+//     }
+
+//     const theme = resolveTheme(job);
+
+//     // Pass 1 (measure): draw on a scratch canvas with the base GAP just to
+//     // find out how much vertical space the fixed-height sections actually
+//     // use, so any leftover space can be spread evenly between sections
+//     // instead of collapsing into one big gap above the footer.
+//     const measureCanvas = createCanvas(POSTER_WIDTH, POSTER_HEIGHT);
+//     const measureCtx = measureCanvas.getContext("2d");
+//     let my = 84;
+//     my = await drawHeader(measureCtx, job, bgImage, my, theme);
+//     my = drawTwoColumnSection(measureCtx, job, my + GAP, theme);
+//     my = drawCompensation(measureCtx, my + GAP, job, theme);
+//     my = drawKeySkills(measureCtx, my + GAP, job, theme);
+//     my = drawCtaBanner(measureCtx, my + GAP, theme);
+
+//     const GAP_COUNT = 5; // header->cols, cols->comp, comp->skills, skills->cta, cta->footer
+//     const available = POSTER_HEIGHT - PAD - FOOTER_HEIGHT - my;
+//     const extraPerGap = Math.max(0, available / GAP_COUNT);
+//     const effectiveGap = Math.min(GAP + extraPerGap, 46);
+
+//     // Pass 2 (final): redraw everything using the evenly distributed gap.
+//     const canvas = createCanvas(POSTER_WIDTH, POSTER_HEIGHT);
+//     const ctx = canvas.getContext("2d");
+//     drawBackground(ctx);
+
+//     let y = 84;
+//     y = await drawHeader(ctx, job, bgImage, y, theme);
+//     y = drawTwoColumnSection(ctx, job, y + effectiveGap, theme);
+//     y = drawCompensation(ctx, y + effectiveGap, job, theme);
+//     y = drawKeySkills(ctx, y + effectiveGap, job, theme);
+//     y = drawCtaBanner(ctx, y + effectiveGap, theme);
+//     drawFooter(ctx, y + effectiveGap, job, theme);
+
+//     return { success: true, buffer: canvas.toBuffer("image/png") };
+//   } catch (error) {
+//     return { success: false, error: error.message };
+//   }
+// }
+
+// module.exports = {
+//   renderJobPoster,
+//   POSTER_WIDTH,
+//   POSTER_HEIGHT,
+//   colors: { PURPLE, PURPLE_DARK, PURPLE_LIGHT, WHITE, YELLOW, BLACK },
+// };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 333333333333333333333333333333333333333333333333333333333333333
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * Poster service — renders a poster that matches the provided Accenture-style
  * reference image: white header with a slanted purple building panel,
@@ -967,12 +2031,14 @@
  */
 
 const { createCanvas, loadImage } = require("@napi-rs/canvas");
-let getCompanyColors;
+let getCompanyBrandColors;
+let getPosterTheme;
 try {
   // Optional — falls back to the Accenture purple theme if unavailable.
-  ({ getCompanyColors } = require("../utils/jobPrompts"));
+  ({ getCompanyBrandColors, getPosterTheme } = require("../utils/jobPrompts"));
 } catch (_) {
-  getCompanyColors = () => ({});
+  getCompanyBrandColors = () => null;
+  getPosterTheme = () => ({ primary: "#6E1FD6", secondary: "#2C0A6E", soft: "#F5F3FF" });
 }
 
 const POSTER_WIDTH = 1080;
@@ -1179,7 +2245,7 @@ function drawIcon(ctx, kind, cx, cy, size, color) {
   }
 }
 
-function drawSquareIcon(ctx, kind, cx, cy, size, bgColor) {
+function drawSquareIcon(ctx, kind, cx, cy, size, bgColor, iconColor = WHITE) {
   const r = 14;
   ctx.save();
   ctx.shadowColor = "rgba(110,31,214,0.30)";
@@ -1187,10 +2253,10 @@ function drawSquareIcon(ctx, kind, cx, cy, size, bgColor) {
   ctx.shadowOffsetY = 4;
   fillRoundedRect(ctx, cx - size / 2, cy - size / 2, size, size, r, bgColor);
   ctx.restore();
-  drawIcon(ctx, kind, cx, cy, size * 0.52, WHITE);
+  drawIcon(ctx, kind, cx, cy, size * 0.52, iconColor);
 }
 
-function drawCircleIcon(ctx, kind, cx, cy, size, bgColor) {
+function drawCircleIcon(ctx, kind, cx, cy, size, bgColor, iconColor = WHITE) {
   ctx.save();
   ctx.shadowColor = "rgba(110,31,214,0.30)";
   ctx.shadowBlur = 10;
@@ -1200,23 +2266,32 @@ function drawCircleIcon(ctx, kind, cx, cy, size, bgColor) {
   ctx.fillStyle = bgColor;
   ctx.fill();
   ctx.restore();
-  drawIcon(ctx, kind, cx, cy, size * 0.52, WHITE);
+  drawIcon(ctx, kind, cx, cy, size * 0.52, iconColor);
 }
 
 // ---------------------------------------------------------------------------
 // Theme resolution — defaults to Accenture purple to match the reference.
 // ---------------------------------------------------------------------------
+function contrastText(hex) {
+  const value = String(hex || "").replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(value)) return WHITE;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? BLACK : WHITE;
+}
+
 function resolveTheme(job) {
-  let colors = {};
+  let brand = null;
   try {
-    colors = getCompanyColors(job.company) || {};
+    brand = getCompanyBrandColors(job.company);
   } catch (_) {
-    colors = {};
+    brand = null;
   }
+  const colors = brand || job.posterTheme || getPosterTheme(job.posterThemeRank || 1);
   return {
     primary: colors.primary || PURPLE,
     dark: colors.secondary || PURPLE_DARK,
-    light: colors.light || PURPLE_LIGHT,
+    light: colors.soft || colors.light || PURPLE_LIGHT,
+    onPrimary: contrastText(colors.primary || PURPLE),
   };
 }
 
@@ -1224,6 +2299,8 @@ function resolveTheme(job) {
 // Background
 // ---------------------------------------------------------------------------
 function drawBackground(ctx) {
+  // The canvas itself is deliberately white for every poster; only cards,
+  // icons, banners and other UI containers receive the selected palette.
   ctx.fillStyle = WHITE;
   ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 }
@@ -1240,57 +2317,101 @@ function drawDotGrid(ctx, x, y, cols, rows, spacing, radius, color) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Header — logo, WE ARE / HIRING!, slanted building panel, JOIN OUR TEAM
-//    ribbon, role bar, eligibility line. Returns bottom Y.
+// 1. Header — "WE ARE / HIRING!" on the left, company name + drive info in
+//    a row on the top-right, black "JOIN OUR TEAM" ribbon, role bar,
+//    eligibility line. No building image here anymore — that now lives in
+//    the two-column section below. Returns bottom Y.
+//
+//    Sizing pass: WE ARE / HIRING! and the company name are bigger and the
+//    company name is drawn in the theme's vibrant primary color (with the
+//    same soft glow already used on HIRING!) so it reads as eye-catching.
+//    No other colors/styles were touched.
 // ---------------------------------------------------------------------------
-async function drawHeader(ctx, job, bgImage, startY, theme) {
+async function drawHeader(ctx, job, startY, theme) {
   const company = String(job.company || "Accenture").replace(" India", "");
   const role = String(job.title || job.role || "OPEN ROLE").toUpperCase();
   const eligibilityLine = job.eligibilityLine || "FRESHERS & EARLY-CAREER TALENT WELCOME";
+  const driveTitle = job.driveTitle || "HIRING DRIVE";
+  const dateText = job.dateText || job.applicationText || "Online applications open";
 
-  // Small reel-safe top margin so nothing sits flush against the very top
-  // edge (where Instagram/Reels UI chrome usually overlaps).
   const y = startY;
+  const rightEdge = POSTER_WIDTH - PAD;
 
-  // --- WE ARE / HIRING! (pushed to the top) -------------------------------
+  // --- WE ARE / HIRING! (left) — enlarged for more impact ------------------
   ctx.textAlign = "left";
   ctx.fillStyle = BLACK;
-  ctx.font = "900 76px 'Arial Black', Arial, sans-serif";
-  ctx.fillText("WE ARE", PAD, y + 78);
+  ctx.font = "900 78px 'Arial Black', Arial, sans-serif";
+  ctx.fillText("WE ARE", PAD, y + 68);
 
   ctx.save();
   ctx.shadowColor = "rgba(110,31,214,0.35)";
-  ctx.shadowBlur = 14;
-  ctx.shadowOffsetY = 6;
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 5;
   ctx.fillStyle = theme.primary;
-  ctx.font = "900 106px 'Arial Black', Arial, sans-serif";
-  ctx.fillText("HIRING!", PAD, y + 196);
+  ctx.font = "900 112px 'Arial Black', Arial, sans-serif";
+  ctx.fillText("HIRING!", PAD, y + 180);
   ctx.restore();
 
-  // --- Company name (big, highlighted, right under HIRING!) --------------
-  ctx.font = "900 72px 'Arial Black', Arial, sans-serif";
-  const companyDisplay = company;
-  const companyWidth = ctx.measureText(companyDisplay).width;
-  const companyBoxY = y + 224;
+  // --- Company name + drive info (top-right row) — auto-fits: shrinks
+  //     font first, then wraps to a second line for long names, so it
+  //     never collides with the "WE ARE / HIRING!" block on the left.
+  //     Enlarged and drawn in the theme's vibrant primary color (with the
+  //     same soft glow as HIRING!) so it's just as eye-catching. -----------
+  const maxCompanyWidth = 460;
+  let companyFontSize = 56;
+  ctx.textAlign = "right";
+  ctx.font = `900 ${companyFontSize}px 'Arial Black', Arial, sans-serif`;
+  while (companyFontSize > 24 && ctx.measureText(company).width > maxCompanyWidth) {
+    companyFontSize -= 2;
+    ctx.font = `900 ${companyFontSize}px 'Arial Black', Arial, sans-serif`;
+  }
+  const companyLines = wrapText(ctx, company, maxCompanyWidth, 2);
+  const companyLineH = companyFontSize + 6;
 
   ctx.save();
-  ctx.translate(PAD - 8, companyBoxY);
-  ctx.rotate(-0.02);
-  fillRoundedRect(ctx, 0, 0, companyWidth + 30, 58, 10, "rgba(255,212,0,0.6)");
-  ctx.restore();
-
-  ctx.fillStyle = BLACK;
-  ctx.fillText(companyDisplay, PAD, companyBoxY + 46);
-
+  ctx.shadowColor = "rgba(110,31,214,0.35)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 4;
   ctx.fillStyle = theme.primary;
-  ctx.font = "800 19px Arial, sans-serif";
-  letterSpaced(ctx, "CAREERS", PAD, companyBoxY + 80, 3, "left");
+  companyLines.forEach((line, i) => {
+    ctx.fillText(line, rightEdge, y + 40 + (i + 1) * companyLineH - companyLineH * 0.25);
+  });
+  ctx.restore();
+  let rightY = y + 40 + companyLines.length * companyLineH;
 
-  // decorative dot grid, upper area
-  drawDotGrid(ctx, 470, y - 4, 8, 6, 21, 3, "rgba(110,31,214,0.35)");
+  // small "HIRING DRIVE"-style caption
+  ctx.fillStyle = theme.primary;
+  ctx.font = "800 17px Arial, sans-serif";
+  const driveText = driveTitle.toUpperCase();
+  letterSpaced(ctx, driveText, rightEdge, rightY + 18, 2, "right");
+  rightY += 30;
 
-  // --- JOIN OUR TEAM ribbon ----------------------------------------------
-  const tagY = companyBoxY + 110;
+  // pill: "Online applications open" with a calendar icon
+  ctx.font = "700 15px Arial, sans-serif";
+  const pillTextW = ctx.measureText(dateText).width;
+  const pillH = 38;
+  const pillW = pillTextW + 56;
+  const pillX = rightEdge - pillW;
+  const pillY = rightY + 10;
+  ctx.save();
+  ctx.shadowColor = "rgba(20,10,50,0.15)";
+  ctx.shadowBlur = 8;
+  strokeRoundedRect(ctx, pillX, pillY, pillW, pillH, 19, "rgba(110,31,214,0.25)", 1.5);
+  fillRoundedRect(ctx, pillX, pillY, pillW, pillH, 19, WHITE);
+  ctx.restore();
+  strokeRoundedRect(ctx, pillX, pillY, pillW, pillH, 19, "rgba(110,31,214,0.25)", 1.5);
+  drawIcon(ctx, "clock", pillX + 24, pillY + pillH / 2, 18, theme.primary);
+  ctx.fillStyle = BLACK;
+  ctx.textAlign = "left";
+  ctx.font = "700 15px Arial, sans-serif";
+  ctx.fillText(dateText, pillX + 42, pillY + pillH / 2 + 5);
+  rightY = pillY + pillH;
+
+  ctx.textAlign = "left";
+
+  // --- JOIN OUR TEAM ribbon (left, below WE ARE/HIRING!) ------------------
+  const leftBottom = y + 180 + 36;
+  const tagY = Math.max(leftBottom, rightY + 20);
   const tagH = 54;
   const tagText = "JOIN OUR TEAM";
   ctx.font = "800 24px Arial, sans-serif";
@@ -1313,105 +2434,33 @@ async function drawHeader(ctx, job, bgImage, startY, theme) {
   ctx.font = "800 24px Arial, sans-serif";
   ctx.fillText(tagText, PAD + 54, tagY + tagH / 2 + 8);
 
-  // --- Slanted building panel (right side) — stretches from just below
-  //     the top margin all the way down to the JOIN OUR TEAM ribbon, so
-  //     there's no dead space beneath it. -----------------------------
-  const rightEdge = POSTER_WIDTH - PAD;
-  const panelTop = y - 12;
-  const panelBottom = tagY - 16;
-  const panelXTop = 590;
-  const panelXBottom = 480;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(panelXTop, panelTop);
-  ctx.lineTo(rightEdge, panelTop);
-  ctx.lineTo(rightEdge, panelBottom);
-  ctx.lineTo(panelXBottom, panelBottom);
-  ctx.closePath();
-  ctx.clip();
-
-  if (bgImage) {
-    const pw = rightEdge - Math.min(panelXTop, panelXBottom);
-    const ph = panelBottom - panelTop;
-    const px = Math.min(panelXTop, panelXBottom);
-    const scale = Math.max(pw / bgImage.width, ph / bgImage.height);
-    const dw = bgImage.width * scale;
-    const dh = bgImage.height * scale;
-    ctx.drawImage(bgImage, px + (pw - dw) / 2, panelTop + (ph - dh) / 2, dw, dh);
-    const tint = ctx.createLinearGradient(0, panelTop, 0, panelBottom);
-    tint.addColorStop(0, "rgba(46,10,110,0.35)");
-    tint.addColorStop(1, "rgba(20,4,56,0.55)");
-    ctx.fillStyle = tint;
-    ctx.fillRect(panelXBottom - 40, panelTop, rightEdge - panelXBottom + 40, panelBottom - panelTop);
-  } else {
-    const g = ctx.createLinearGradient(panelXTop, panelTop, rightEdge, panelBottom);
-    g.addColorStop(0, theme.light);
-    g.addColorStop(1, theme.dark);
-    ctx.fillStyle = g;
-    ctx.fillRect(panelXBottom - 40, panelTop, rightEdge - panelXBottom + 40, panelBottom - panelTop);
-
-    // simple building silhouette
-    const buildX = panelXTop + 30;
-    const buildW = rightEdge - buildX - 20;
-    const buildTop = panelTop + 140;
-    const buildBottom = panelBottom - 10;
-    ctx.fillStyle = "rgba(10,4,30,0.55)";
-    fillRoundedRect(ctx, buildX, buildTop, buildW, buildBottom - buildTop, 4);
-    // lit windows grid
-    const winCols = 5;
-    const winRows = Math.max(6, Math.round((buildBottom - buildTop) / 46));
-    const winPadX = 14;
-    const winPadY = 16;
-    const cellW = (buildW - winPadX * 2) / winCols;
-    const cellH = (buildBottom - buildTop - winPadY * 2) / winRows;
-    for (let r = 0; r < winRows; r++) {
-      for (let c = 0; c < winCols; c++) {
-        const lit = (r + c) % 3 !== 0;
-        ctx.fillStyle = lit ? "rgba(255,212,0,0.55)" : "rgba(255,255,255,0.08)";
-        ctx.fillRect(
-          buildX + winPadX + c * cellW + 3,
-          buildTop + winPadY + r * cellH + 3,
-          cellW - 6,
-          cellH - 6
-        );
-      }
-    }
-    // small logo plate on the building
-    ctx.fillStyle = "rgba(10,4,30,0.75)";
-    fillRoundedRect(ctx, buildX + buildW * 0.5 - 60, buildTop - 34, 120, 28, 6);
-    ctx.fillStyle = WHITE;
-    ctx.font = "700 15px Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(company.toLowerCase(), buildX + buildW * 0.5, buildTop - 15);
-    ctx.textAlign = "left";
-  }
-
-  // decorative dot grids over the panel (top + bottom corners)
-  drawDotGrid(ctx, panelXTop + 40, panelTop + 10, 8, 5, 22, 3, "rgba(255,255,255,0.5)");
-  drawDotGrid(ctx, rightEdge - 190, panelBottom - 70, 8, 4, 22, 3, "rgba(255,255,255,0.35)");
-  ctx.restore();
-
-  ctx.textAlign = "left";
-
-  // --- Role bar ------------------------------------------------------------
+  // --- Role bar (auto-fits: shrinks font, then wraps to 2 lines for very
+  //     long titles) ---------------------------------------------------------
   const barY = tagY + tagH + 12;
-  const barH = 72;
   const barW = rightEdge - PAD;
+  let roleFontSize = 40;
+  ctx.font = `900 ${roleFontSize}px 'Arial Black', Arial, sans-serif`;
+  while (roleFontSize > 24 && ctx.measureText(role).width > barW - 60) {
+    roleFontSize -= 2;
+    ctx.font = `900 ${roleFontSize}px 'Arial Black', Arial, sans-serif`;
+  }
+  const roleLines = wrapText(ctx, role, barW - 60, 2);
+  const roleLineH = roleFontSize + 6;
+  const barH = Math.max(72, roleLines.length * roleLineH + 30);
   const barGrad = ctx.createLinearGradient(PAD, barY, PAD + barW, barY);
   barGrad.addColorStop(0, theme.primary);
-  barGrad.addColorStop(1, theme.dark);
+  barGrad.addColorStop(1, theme.primary);
   ctx.save();
   ctx.shadowColor = "rgba(46,10,110,0.35)";
   ctx.shadowBlur = 16;
   ctx.shadowOffsetY = 6;
   fillRoundedRect(ctx, PAD, barY, barW, barH, 16, barGrad);
   ctx.restore();
-  ctx.fillStyle = WHITE;
+  ctx.fillStyle = theme.onPrimary;
   ctx.textAlign = "center";
-  ctx.font = "900 40px 'Arial Black', Arial, sans-serif";
-  const roleLines = wrapText(ctx, role, barW - 60, 1);
-  ctx.fillText(roleLines[0], POSTER_WIDTH / 2, barY + barH / 2 + 14);
+  ctx.font = `900 ${roleFontSize}px 'Arial Black', Arial, sans-serif`;
+  const roleStartY = barY + barH / 2 - ((roleLines.length - 1) * roleLineH) / 2 + roleFontSize * 0.35;
+  roleLines.forEach((line, i) => ctx.fillText(line, POSTER_WIDTH / 2, roleStartY + i * roleLineH));
 
   // --- Eligibility subtitle -------------------------------------------------
   const subY = barY + barH + 32;
@@ -1436,120 +2485,143 @@ async function drawHeader(ctx, job, bgImage, startY, theme) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Two-column info section — left info cards, right "why join" panel.
+// 2. Two-column section — left info cards, right a clean rounded, shadowed
+//    company-image container (center-right on the page). The image box
+//    height always matches the info-card column's natural height.
 //    Returns bottom Y.
+//
+//    Sizing pass: the right column now takes a larger share of the row's
+//    width (and the minimum card height grew slightly), so the building/
+//    photo container is visibly bigger. No colors/styles changed.
 // ---------------------------------------------------------------------------
-function drawTwoColumnSection(ctx, job, startY, theme) {
+function drawTwoColumnSection(ctx, job, bgImage, startY, theme) {
   const totalW = POSTER_WIDTH - PAD * 2;
-  const colGap = 24;
-  const colW = (totalW - colGap) / 2;
+  const colGap = 20;
+  const leftW = Math.round(totalW * 0.52);
+  const rightW = totalW - leftW - colGap;
   const leftX = PAD;
-  const rightX = PAD + colW + colGap;
+  const rightX = PAD + leftW + colGap;
 
-  // ---- Left column: info cards ----
-  const infoRows = [
-    { icon: "person", label: "ELIGIBILITY", value: job.eligibility || "Freshers / recent graduates" },
-    { icon: "briefcase", label: "EXPERIENCE", value: job.experience || "Freshers (0-2 years)" },
-    { icon: "pin", label: "LOCATION", value: job.location || "India" },
-    { icon: "clock", label: "JOB TYPE", value: job.jobType || "Full-time / Hybrid" },
-  ];
-  const rowH = 92;
+  // ---- Left column: info cards (flexible — grows with content) ----
+  const infoRows = Array.isArray(job.infoRows) && job.infoRows.length
+    ? job.infoRows
+    : [
+        { icon: "person", label: "ELIGIBILITY", value: job.eligibility || "Freshers / recent graduates" },
+        { icon: "briefcase", label: "EXPERIENCE", value: job.experience || "Freshers (0-2 years)" },
+        { icon: "pin", label: "LOCATION", value: job.location || "India" },
+        { icon: "clock", label: "JOB TYPE", value: job.jobType || "Full-time / Hybrid" },
+      ];
   const rowGap = 14;
+  const valueFont = "900 22px 'Arial Black', Arial, sans-serif";
+  const valueLineH = 24;
+  const MIN_ROW_H = 100;
+
+  // Measure how tall each row actually needs to be.
+  ctx.font = valueFont;
+  const rowHeights = infoRows.map((row) => {
+    const lines = wrapText(ctx, row.value, leftW - 130, 3).length;
+    return Math.max(MIN_ROW_H, 84 + (lines - 1) * valueLineH);
+  });
+  const leftContentH = rowHeights.reduce((a, b) => a + b, 0) + (infoRows.length - 1) * rowGap;
+
+  // ---- Draw left column ----
   let cy = startY;
-  infoRows.forEach((row) => {
+  infoRows.forEach((row, i) => {
+    const rh = rowHeights[i];
     ctx.save();
     ctx.shadowColor = "rgba(20,10,50,0.08)";
     ctx.shadowBlur = 14;
-    fillRoundedRect(ctx, leftX, cy, colW, rowH, 18, CARD_BG);
+    fillRoundedRect(ctx, leftX, cy, leftW, rh, 18, CARD_BG);
     ctx.restore();
     // thin purple accent line on the right inner edge
     ctx.strokeStyle = "rgba(110,31,214,0.25)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(leftX + colW - 18, cy + 16);
-    ctx.lineTo(leftX + colW - 18, cy + rowH - 16);
+    ctx.moveTo(leftX + leftW - 18, cy + 16);
+    ctx.lineTo(leftX + leftW - 18, cy + rh - 16);
     ctx.stroke();
 
-    drawSquareIcon(ctx, row.icon, leftX + 52, cy + rowH / 2, 60, theme.primary);
+    drawSquareIcon(ctx, row.icon, leftX + 50, cy + rh / 2, 56, theme.primary, theme.onPrimary);
 
     ctx.fillStyle = theme.primary;
-    ctx.font = "800 17px Arial, sans-serif";
+    ctx.font = "800 16px Arial, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(row.label, leftX + 100, cy + 34);
+    ctx.fillText(row.label, leftX + 94, cy + 32);
 
     ctx.fillStyle = BLACK;
-    ctx.font = "900 24px 'Arial Black', Arial, sans-serif";
-    drawWrapped(ctx, row.value, leftX + 100, cy + 66, colW - 130, 26, 2, "left");
+    ctx.font = valueFont;
+    drawWrapped(ctx, row.value, leftX + 94, cy + 62, leftW - 124, valueLineH, 3, "left");
 
-    cy += rowH + rowGap;
+    cy += rh + rowGap;
   });
   const leftBottom = cy - rowGap;
 
-  // ---- Right column: "WHY JOIN THIS TEAM?" panel ----
-  const benefits = Array.isArray(job.benefits) && job.benefits.length
-    ? job.benefits.slice(0, 4).map((b) =>
-        typeof b === "string"
-          ? { icon: "growth", title: b, sub: "" }
-          : { icon: b.icon || "growth", title: b.title || b.text || "", sub: b.sub || b.subtitle || "" }
-      )
-    : [
-        { icon: "growth", title: "CAREER GROWTH", sub: "Build a meaningful career" },
-        { icon: "gradcap", title: "LEARN & UPSKILL", sub: "Work with modern tools" },
-        { icon: "users", title: "INCLUSIVE CULTURE", sub: "People-first workplace" },
-        { icon: "globe", title: "GLOBAL IMPACT", sub: "Projects that matter" },
-      ];
+  // ---- Right: clean rounded, shadowed company-image container ----
+  const rightH = leftContentH;
 
-  const headerH = 74;
-  const benefitRowH = (leftBottom - startY - headerH) / benefits.length;
-
+  // soft colored "shadow card" peeking out behind, for a bit of depth
   ctx.save();
-  ctx.shadowColor = "rgba(20,10,50,0.1)";
-  ctx.shadowBlur = 16;
-  fillRoundedRect(ctx, rightX, startY, colW, leftBottom - startY, 20, CARD_BG);
+  ctx.globalAlpha = 0.5;
+  fillRoundedRect(ctx, rightX + 10, startY + 12, rightW, rightH, 24, theme.dark);
   ctx.restore();
 
-  const headerGrad = ctx.createLinearGradient(rightX, startY, rightX + colW, startY);
-  headerGrad.addColorStop(0, theme.primary);
-  headerGrad.addColorStop(1, theme.dark);
   ctx.save();
-  roundedRect(ctx, rightX, startY, colW, headerH, 20);
+  ctx.shadowColor = "rgba(20,10,50,0.28)";
+  ctx.shadowBlur = 22;
+  ctx.shadowOffsetY = 10;
+  fillRoundedRect(ctx, rightX, startY, rightW, rightH, 24, WHITE);
+  ctx.restore();
+
+  ctx.save();
+  roundedRect(ctx, rightX, startY, rightW, rightH, 24);
   ctx.clip();
-  ctx.fillStyle = headerGrad;
-  ctx.fillRect(rightX, startY, colW, headerH);
-  ctx.restore();
 
-  ctx.fillStyle = WHITE;
-  ctx.font = "800 21px Arial, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("WHY JOIN THIS TEAM?", rightX + colW / 2, startY + 32);
-  ctx.fillStyle = YELLOW;
-  for (let i = 0; i < 4; i++) {
-    ctx.beginPath();
-    const sx = rightX + colW / 2 - 46 + i * 30;
-    drawIcon(ctx, "star", sx, startY + 54, 14, YELLOW);
+  if (bgImage) {
+    const scale = Math.max(rightW / bgImage.width, rightH / bgImage.height);
+    const dw = bgImage.width * scale;
+    const dh = bgImage.height * scale;
+    ctx.drawImage(bgImage, rightX + (rightW - dw) / 2, startY + (rightH - dh) / 2, dw, dh);
+    const fade = ctx.createLinearGradient(0, startY + rightH * 0.6, 0, startY + rightH);
+    fade.addColorStop(0, "rgba(0,0,0,0)");
+    fade.addColorStop(1, "rgba(20,4,56,0.35)");
+    ctx.fillStyle = fade;
+    ctx.fillRect(rightX, startY, rightW, rightH);
+  } else {
+    const g = ctx.createLinearGradient(rightX, startY, rightX + rightW, startY + rightH);
+    g.addColorStop(0, theme.light);
+    g.addColorStop(1, theme.dark);
+    ctx.fillStyle = g;
+    ctx.fillRect(rightX, startY, rightW, rightH);
+
+    // simple building silhouette + lit windows, scaled to fit the box
+    const buildX = rightX + rightW * 0.12;
+    const buildW = rightW * 0.76;
+    const buildTop = startY + rightH * 0.16;
+    const buildBottom = startY + rightH - rightH * 0.08;
+    ctx.fillStyle = "rgba(10,4,30,0.55)";
+    fillRoundedRect(ctx, buildX, buildTop, buildW, buildBottom - buildTop, 4);
+    const winCols = 4;
+    const winRows = Math.max(4, Math.round((buildBottom - buildTop) / 34));
+    const winPadX = 10;
+    const winPadY = 12;
+    const cellW = (buildW - winPadX * 2) / winCols;
+    const cellH = (buildBottom - buildTop - winPadY * 2) / winRows;
+    for (let r = 0; r < winRows; r++) {
+      for (let c = 0; c < winCols; c++) {
+        const lit = (r + c) % 3 !== 0;
+        ctx.fillStyle = lit ? "rgba(255,212,0,0.55)" : "rgba(255,255,255,0.08)";
+        ctx.fillRect(
+          buildX + winPadX + c * cellW + 2,
+          buildTop + winPadY + r * cellH + 2,
+          cellW - 4,
+          cellH - 4
+        );
+      }
+    }
   }
 
-  let by = startY + headerH;
-  benefits.forEach((b, i) => {
-    drawCircleIcon(ctx, b.icon, rightX + 44, by + benefitRowH / 2, 48, theme.primary);
-    ctx.fillStyle = BLACK;
-    ctx.font = "800 19px 'Arial Black', Arial, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(b.title, rightX + 82, by + benefitRowH / 2 - 4);
-    ctx.fillStyle = GREY_TEXT;
-    ctx.font = "600 15px Arial, sans-serif";
-    ctx.fillText(b.sub, rightX + 82, by + benefitRowH / 2 + 18);
-
-    if (i < benefits.length - 1) {
-      ctx.strokeStyle = DIVIDER;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(rightX + 20, by + benefitRowH);
-      ctx.lineTo(rightX + colW - 20, by + benefitRowH);
-      ctx.stroke();
-    }
-    by += benefitRowH;
-  });
+  ctx.restore();
+  strokeRoundedRect(ctx, rightX, startY, rightW, rightH, 24, "rgba(255,255,255,0.4)", 2);
 
   return leftBottom;
 }
@@ -1565,7 +2637,7 @@ function drawCompensation(ctx, startY, job, theme) {
 
   const g = ctx.createLinearGradient(x, y, x + w, y + h);
   g.addColorStop(0, theme.primary);
-  g.addColorStop(1, theme.dark);
+  g.addColorStop(1, theme.primary);
   ctx.save();
   ctx.shadowColor = "rgba(46,10,110,0.35)";
   ctx.shadowBlur = 18;
@@ -1576,7 +2648,7 @@ function drawCompensation(ctx, startY, job, theme) {
   drawDotGrid(ctx, x + 30, y + 32, 3, 4, 18, 3, "rgba(255,255,255,0.35)");
   drawDotGrid(ctx, x + w - 66, y + 32, 3, 4, 18, 3, "rgba(255,255,255,0.35)");
 
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillStyle = theme.onPrimary;
   ctx.textAlign = "center";
   ctx.font = "700 20px Arial, sans-serif";
   letterSpaced(ctx, "\u2014  COMPENSATION PACKAGE  \u2014", POSTER_WIDTH / 2, y + 42, 2, "center");
@@ -1594,17 +2666,17 @@ function drawCompensation(ctx, startY, job, theme) {
     const total = preW + midW + postW + gap * 2;
     let cx = POSTER_WIDTH / 2 - total / 2;
     ctx.textAlign = "left";
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = theme.onPrimary;
     ctx.fillText(pre.trim(), cx, y + 106);
     cx += preW + gap;
-    ctx.fillStyle = YELLOW;
+    ctx.fillStyle = theme.onPrimary;
     ctx.fillText(midClean, cx, y + 106);
     cx += midW + gap;
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = theme.onPrimary;
     ctx.fillText(post.trim(), cx, y + 106);
     ctx.textAlign = "center";
   } else {
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = theme.onPrimary;
     ctx.fillText(comp, POSTER_WIDTH / 2, y + 106);
   }
 
@@ -1613,8 +2685,10 @@ function drawCompensation(ctx, startY, job, theme) {
 
 // ---------------------------------------------------------------------------
 // 4. Key skills — bigger, eye-catching bulleted grid (each skill as its own
-//    row with a filled disc bullet), generous spacing between items.
-//    Returns bottom Y.
+//    row with a filled disc bullet). Fully flexible: any number of skills
+//    (4, 6, 7, or more) automatically adds rows, and any row containing a
+//    longer skill name that wraps to 2 lines grows just that row so text
+//    never gets clipped. Returns bottom Y.
 // ---------------------------------------------------------------------------
 function drawKeySkills(ctx, startY, job, theme) {
   const w = POSTER_WIDTH - PAD * 2;
@@ -1628,13 +2702,26 @@ function drawKeySkills(ctx, startY, job, theme) {
       : ["Communication", "Problem solving", "Content review", "Attention to detail"];
 
   const titleH = 60;
-  const itemGapY = 20; // extra breathing room between each skill row
-  const itemH = 50;
+  const itemGapY = 20; // breathing room between each skill row
+  const MIN_ITEM_H = 50;
+  const skillLineH = 22;
   const cols = 2;
   const rows = Math.ceil(rawSkills.length / cols);
   const colGap = 20;
   const colW = (w - 48 - colGap) / cols;
-  const bodyH = rows * itemH + (rows - 1) * itemGapY;
+
+  // Pass 1: measure how many lines each skill needs, then size every row
+  // to the taller of its (up to two) items so nothing gets clipped.
+  ctx.font = "700 19px Arial, sans-serif";
+  const skillLines = rawSkills.map((s) => wrapText(ctx, s, colW - 64, 2).length);
+  const rowItemHeights = [];
+  for (let r = 0; r < rows; r++) {
+    const a = skillLines[r * cols] || 1;
+    const b = skillLines[r * cols + 1] || 1;
+    const maxLines = Math.max(a, b);
+    rowItemHeights.push(Math.max(MIN_ITEM_H, 30 + maxLines * skillLineH));
+  }
+  const bodyH = rowItemHeights.reduce((a, b) => a + b, 0) + (rows - 1) * itemGapY;
   const h = titleH + bodyH + 40;
 
   ctx.save();
@@ -1643,7 +2730,7 @@ function drawKeySkills(ctx, startY, job, theme) {
   fillRoundedRect(ctx, x, y, w, h, 22, CARD_BG);
   ctx.restore();
 
-  drawCircleIcon(ctx, "target", x + 54, y + titleH / 2 + 10, 52, theme.primary);
+  drawCircleIcon(ctx, "target", x + 54, y + titleH / 2 + 10, 52, theme.primary, theme.onPrimary);
   ctx.fillStyle = theme.primary;
   ctx.font = "900 26px 'Arial Black', Arial, sans-serif";
   ctx.textAlign = "left";
@@ -1656,36 +2743,44 @@ function drawKeySkills(ctx, startY, job, theme) {
   ctx.lineTo(x + w - 24, y + titleH + 4);
   ctx.stroke();
 
-  rawSkills.forEach((skill, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const ix = x + 24 + col * (colW + colGap);
-    const iy = y + titleH + 20 + row * (itemH + itemGapY);
+  let rowTop = y + titleH + 20;
+  for (let r = 0; r < rows; r++) {
+    const itemH = rowItemHeights[r];
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      if (i >= rawSkills.length) continue;
+      const skill = rawSkills[i];
+      const ix = x + 24 + c * (colW + colGap);
+      const iy = rowTop;
 
-    ctx.save();
-    ctx.globalAlpha = 0.07;
-    fillRoundedRect(ctx, ix, iy, colW, itemH, 14, theme.primary);
-    ctx.restore();
-    strokeRoundedRect(ctx, ix, iy, colW, itemH, 14, "rgba(110,31,214,0.18)", 1.5);
+      ctx.save();
+      ctx.globalAlpha = 0.07;
+      fillRoundedRect(ctx, ix, iy, colW, itemH, 14, theme.primary);
+      ctx.restore();
+      strokeRoundedRect(ctx, ix, iy, colW, itemH, 14, "rgba(110,31,214,0.18)", 1.5);
 
-    ctx.save();
-    ctx.shadowColor = "rgba(110,31,214,0.4)";
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.arc(ix + 26, iy + itemH / 2, 9, 0, Math.PI * 2);
-    ctx.fillStyle = theme.primary;
-    ctx.fill();
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(ix + 26, iy + itemH / 2, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = YELLOW;
-    ctx.fill();
+      ctx.save();
+      ctx.shadowColor = "rgba(110,31,214,0.4)";
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(ix + 26, iy + itemH / 2, 9, 0, Math.PI * 2);
+      ctx.fillStyle = theme.primary;
+      ctx.fill();
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(ix + 26, iy + itemH / 2, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = YELLOW;
+      ctx.fill();
 
-    ctx.fillStyle = BLACK;
-    ctx.font = "700 19px Arial, sans-serif";
-    ctx.textAlign = "left";
-    drawWrapped(ctx, skill, ix + 48, iy + itemH / 2 + 7, colW - 64, 20, 1, "left");
-  });
+      ctx.fillStyle = BLACK;
+      ctx.font = "700 19px Arial, sans-serif";
+      ctx.textAlign = "left";
+      const lines = wrapText(ctx, skill, colW - 64, 2);
+      const textStartY = iy + itemH / 2 - ((lines.length - 1) * skillLineH) / 2 + 7;
+      lines.forEach((line, li) => ctx.fillText(line, ix + 48, textStartY + li * skillLineH));
+    }
+    rowTop += itemH + itemGapY;
+  }
 
   return y + h;
 }
@@ -1781,7 +2876,7 @@ function drawFooter(ctx, startY, job, theme) {
   const fH = FOOTER_HEIGHT;
   const g = ctx.createLinearGradient(PAD, fY, POSTER_WIDTH - PAD, fY);
   g.addColorStop(0, theme.primary);
-  g.addColorStop(1, theme.dark);
+  g.addColorStop(1, theme.primary);
   fillRoundedRect(ctx, PAD, fY, POSTER_WIDTH - PAD * 2, fH, 20, g);
 
   const midX = POSTER_WIDTH / 2;
@@ -1794,19 +2889,19 @@ function drawFooter(ctx, startY, job, theme) {
 
   // Left: bell + follow text
   const leftCx = PAD + (midX - PAD) / 2;
-  drawIcon(ctx, "bell", PAD + 70, fY + fH / 2, 30, WHITE);
+  drawIcon(ctx, "bell", PAD + 70, fY + fH / 2, 30, theme.onPrimary);
   ctx.textAlign = "left";
   ctx.font = "800 18px Arial, sans-serif";
-  ctx.fillStyle = WHITE;
+  ctx.fillStyle = theme.onPrimary;
   ctx.fillText("FOLLOW FOR DAILY", PAD + 106, fY + fH / 2 - 6);
-  ctx.fillStyle = YELLOW;
+  ctx.fillStyle = theme.onPrimary;
   ctx.fillText("VERIFIED", PAD + 106, fY + fH / 2 + 20);
-  ctx.fillStyle = WHITE;
+  ctx.fillStyle = theme.onPrimary;
   ctx.fillText(" JOB UPDATES", PAD + 106 + ctx.measureText("VERIFIED").width, fY + fH / 2 + 20);
 
   // Right: share + save text
-  drawIcon(ctx, "share", midX + 64, fY + fH / 2, 28, WHITE);
-  ctx.fillStyle = WHITE;
+  drawIcon(ctx, "share", midX + 64, fY + fH / 2, 28, theme.onPrimary);
+  ctx.fillStyle = theme.onPrimary;
   ctx.font = "800 18px Arial, sans-serif";
   ctx.fillText("SAVE & SHARE", midX + 98, fY + fH / 2 - 6);
   ctx.fillText("WITH YOUR FRIENDS", midX + 98, fY + fH / 2 + 20);
@@ -1834,15 +2929,20 @@ async function renderJobPoster({ backgroundBuffer, job }) {
     // instead of collapsing into one big gap above the footer.
     const measureCanvas = createCanvas(POSTER_WIDTH, POSTER_HEIGHT);
     const measureCtx = measureCanvas.getContext("2d");
-    let my = 84;
-    my = await drawHeader(measureCtx, job, bgImage, my, theme);
-    my = drawTwoColumnSection(measureCtx, job, my + GAP, theme);
+    let my = 44; // trimmed top margin — frees room for the bigger header text
+    my = await drawHeader(measureCtx, job, my, theme);
+    my = drawTwoColumnSection(measureCtx, job, bgImage, my + GAP, theme);
     my = drawCompensation(measureCtx, my + GAP, job, theme);
     my = drawKeySkills(measureCtx, my + GAP, job, theme);
     my = drawCtaBanner(measureCtx, my + GAP, theme);
 
-    const GAP_COUNT = 5; // header->cols, cols->comp, comp->skills, skills->cta, cta->footer
-    const available = POSTER_HEIGHT - PAD - FOOTER_HEIGHT - my;
+    // 4 inter-section gaps (header->cols, cols->comp, comp->skills,
+    // skills->cta); the footer is bottom-anchored separately below so it
+    // never floats with dead space beneath it. Cap trimmed down so the
+    // extra room goes to the bigger header text / image container instead
+    // of sitting as loose gap between sections.
+    const GAP_COUNT = 4;
+    const available = POSTER_HEIGHT - PAD - FOOTER_HEIGHT - GAP - my;
     const extraPerGap = Math.max(0, available / GAP_COUNT);
     const effectiveGap = Math.min(GAP + extraPerGap, 46);
 
@@ -1851,13 +2951,16 @@ async function renderJobPoster({ backgroundBuffer, job }) {
     const ctx = canvas.getContext("2d");
     drawBackground(ctx);
 
-    let y = 84;
-    y = await drawHeader(ctx, job, bgImage, y, theme);
-    y = drawTwoColumnSection(ctx, job, y + effectiveGap, theme);
+    let y = 44;
+    y = await drawHeader(ctx, job, y, theme);
+    y = drawTwoColumnSection(ctx, job, bgImage, y + effectiveGap, theme);
     y = drawCompensation(ctx, y + effectiveGap, job, theme);
     y = drawKeySkills(ctx, y + effectiveGap, job, theme);
     y = drawCtaBanner(ctx, y + effectiveGap, theme);
-    drawFooter(ctx, y + effectiveGap, job, theme);
+
+    // Footer always sits flush against the bottom margin.
+    const footerY = Math.max(y + GAP, POSTER_HEIGHT - PAD - FOOTER_HEIGHT);
+    drawFooter(ctx, footerY, job, theme);
 
     return { success: true, buffer: canvas.toBuffer("image/png") };
   } catch (error) {
