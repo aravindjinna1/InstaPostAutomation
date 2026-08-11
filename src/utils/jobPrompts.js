@@ -176,6 +176,10 @@ Make the applyLink look like a real careers URL.
  */
 function buildRealJobCaption(job) {
   const eligibility = job.eligibility || job.experience || "Freshers friendly";
+  const skills =
+    Array.isArray(job.skills)
+      ? job.skills.map((s) => String(s).trim()).filter(Boolean).join(", ")
+      : (job.skills || "Problem solving, Communication, Fundamentals");
   const apply = job.applyLink || "";
   const resource = job.resourceLink || "";
 
@@ -186,7 +190,7 @@ function buildRealJobCaption(job) {
     `📍 Location: ${job.location || "N/A"}`,
     `💼 Eligibility: ${eligibility}`,
     `🕒 Type: ${job.jobType || "Full-time"}`,
-    `🛠 Skills: ${job.skills || "Problem solving, Communication, Fundamentals"}`,
+    `🛠 Skills: ${skills}`,
     `💰 Salary: ${job.salaryRange || "Competitive package"}`,
     ``,
     `📌 ${job.description || ""}`,
@@ -219,8 +223,11 @@ function buildJobImagePrompt(job) {
   const location = job.location || "India";
   const experience = job.experience || "Freshers (0-2 years)";
   const jobType = job.jobType || "Full-time";
-  const skills = (job.skills || "Problem solving, Communication, Technical fundamentals, DSA, SQL")
-    .split(",").map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 9).join(", ");
+  const rawSkills = job.skills || "Problem solving, Communication, Technical fundamentals, DSA, SQL";
+  const skillList = Array.isArray(rawSkills)
+    ? rawSkills.map((s) => String(s).trim())
+    : String(rawSkills).split(",").map((s) => s.trim());
+  const skills = skillList.map((s) => s.toUpperCase()).filter(Boolean).slice(0, 9).join(", ");
   const salary = job.salaryRange || "Competitive package";
   const colors = getCompanyColors(job.company);
 

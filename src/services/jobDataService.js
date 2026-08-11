@@ -30,8 +30,16 @@
  */
 
 const axios = require("axios");
+const mongoose = require("mongoose");
 const Job = require("../models/Job");
 const { getCompanyColors } = require("../utils/jobPrompts");
+
+// JOBS SOURCE (what gets posted to Instagram): the next unposted job is read
+// from JOBS_DB_NAME.JOBS_COLLECTION_NAME (env), e.g. JobsData_fromBlogs.New_Jobs.
+// This is SEPARATE from where the published Post records are stored
+// (database AutoInsta, collection Jobs-posts via the Post model).
+const JOBS_DB_NAME = process.env.JOBS_DB_NAME || process.env.MONGO_DB_NAME || "AutoInsta";
+const JOBS_COLLECTION_NAME = process.env.JOBS_COLLECTION_NAME || "jobs";
 
 // ---------------------------------------------------------------------------
 // Source config
@@ -47,6 +55,8 @@ const INDIAN_GREENHOUSE_BOARDS = [
   "epam", "phonepe", "swiggy", "zoho", "hasura", "nilenso", "groww",
   "cashify", "fampay", "pixxel", "jungleworks", "yellowai", "idfy",
   "smallcase", "dunzo", "porter", "udaan", "truecaller", "shortpoint",
+  "tcs", "infosys", "wipro", "accenture", "capgemini", "cognizant",
+  "techmahindra", "deloitte", "ey", "kpmg", "genpact", "lti",
 ];
 
 // Indian MNCs with known public company-slug endpoints (SmartRecruiters etc.)
@@ -511,6 +521,57 @@ const SKILL_LIBRARY = [
   "Graphic Design", "UI/UX", "Figma", "Photography", "Video Editing",
 ];
 
+const ROLE_SKILL_PATTERNS = [
+  { pattern: /(front|react|angular|vue|ui|ux)/i, skills: ["JavaScript", "React", "HTML", "CSS", "TypeScript", "Responsive Design"] },
+  { pattern: /(back|node|java|python|dotnet|spring|api|microservice)/i, skills: ["Node.js", "REST APIs", "SQL", "Java", "Spring", "Microservices"] },
+  { pattern: /(full[ -]?stack|fullstack)/i, skills: ["JavaScript", "Node.js", "React", "SQL", "REST APIs", "AWS"] },
+  { pattern: /(data|analyst|analytics|business analyst)/i, skills: ["SQL", "Excel", "Data Analysis", "Power BI", "Tableau", "Statistics"] },
+  { pattern: /(devops|cloud|aws|azure|gcp|kubernetes|docker)/i, skills: ["AWS", "Docker", "Kubernetes", "Linux", "CI/CD", "Terraform"] },
+  { pattern: /(machine|ai|ml|artificial intelligence|data scientist)/i, skills: ["Python", "Machine Learning", "TensorFlow", "Data Science", "Pandas", "Statistics"] },
+  { pattern: /(qa|test|automation|quality assurance)/i, skills: ["Selenium", "Automation Testing", "API Testing", "QA", "JUnit", "TestNG"] },
+  { pattern: /(product|scrum|agile|project manager|pm)/i, skills: ["Agile", "Scrum", "Stakeholder Management", "Product Strategy", "Roadmapping", "User Research"] },
+  { pattern: /(marketing|seo|content|social media)/i, skills: ["Digital Marketing", "SEO", "Content Writing", "Social Media", "Google Analytics", "Campaign Management"] },
+];
+
+const GENERIC_FRESHER_SKILL_VARIANTS = [
+  ["Problem Solving", "Communication", "Teamwork", "DSA", "SQL"],
+  ["JavaScript", "HTML", "CSS", "Git", "Problem Solving"],
+  ["Python", "Data Structures", "Algorithms", "SQL", "Teamwork"],
+  ["Excel", "Analytics", "SQL", "Communication", "Critical Thinking"],
+  ["React", "JavaScript", "REST APIs", "Communication", "Teamwork"],
+];
+
+function normalizeSkill(skill) {
+  return skill
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\bjs\b/gi, "JavaScript")
+    .replace(/\bsql\b/gi, "SQL")
+    .replace(/\bapi\b/gi, "API")
+    .replace(/\baws\b/gi, "AWS")
+    .replace(/\bui\/ux\b/gi, "UI/UX")
+    .replace(/\bdevops\b/gi, "DevOps")
+    .replace(/\bqa\b/gi, "QA");
+}
+
+function inferSkillsFromRole(role) {
+  const roleLower = (role || "").toLowerCase();
+  for (const entry of ROLE_SKILL_PATTERNS) {
+    if (entry.pattern.test(roleLower)) {
+      return entry.skills;
+    }
+  }
+  if (roleLower.includes("analyst")) return ["SQL", "Excel", "Data Analysis", "Power BI", "Communication"];
+  if (roleLower.includes("full stack") || roleLower.includes("fullstack")) return ["JavaScript", "Node.js", "React", "SQL", "REST APIs"];
+  return ["Problem Solving", "Communication", "Teamwork", "Adaptability", "Learning Attitude"];
+}
+
+function fallbackSkillsForRole(role) {
+  const inferred = inferSkillsFromRole(role);
+  const variant = GENERIC_FRESHER_SKILL_VARIANTS[Math.floor(Math.random() * GENERIC_FRESHER_SKILL_VARIANTS.length)];
+  return [...new Set([...inferred, ...variant])].slice(0, 9);
+}
+
 /**
  * Extracts real skills by scanning the job description AND the role title
  * for known skill keywords. Returns a comma-separated string (capped at 9
@@ -518,50 +579,33 @@ const SKILL_LIBRARY = [
  * default instead of the placeholder "See description".
  */
 function extractSkillsFromDescription(job) {
-  const rawDesc = String(job.description || "") || "";
-  const role = String(job.role || "") || "";
-  const existing = String(job.skills || "") || "";
+  const role = String(job.role || "");
+  const existing = String(job.skills || "");
 
-  // If the source already gave real skills (not the placeholder), keep them.
   const existingClean = existing
     .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s && s.toLowerCase() !== "see description" && s.toLowerCase() !== "posted recently");
+    .map((s) => normalizeSkill(s))
+    .filter((s) => s && !["see description", "posted recently", "n/a"].includes(s.toLowerCase()));
 
-  // Build the search haystack from existing skills + description + role.
-  const haystack = `${existing} ${job.role || ""} ${job.description || ""}`.toLowerCase();
-
+  const haystack = `${existing} ${role} ${job.description || ""}`.toLowerCase();
   const found = [];
   for (const skill of SKILL_LIBRARY) {
-    if (haystack.includes(skill.toLowerCase())) {
-      // dedupe (case-insensitive)
-      if (!found.some((f) => f.toLowerCase() === skill.toLowerCase()) && !existingClean.some((e) => e.toLowerCase() === skill.toLowerCase())) {
+    const skillLower = skill.toLowerCase();
+    if (haystack.includes(skillLower)) {
+      if (!found.some((f) => f.toLowerCase() === skillLower) && !existingClean.some((e) => e.toLowerCase() === skillLower)) {
         found.push(skill);
       }
     }
     if (found.length + existingClean.length >= 9) break;
   }
 
-  const all = [...existingClean, ...found].slice(0, 9);
-  if (all.length >= 3) return all.join(", ");
+  const inferred = inferSkillsFromRole(role);
+  const combined = [...existingClean, ...found, ...inferred].map(normalizeSkill);
+  const unique = [...new Set(combined)].slice(0, 9);
+  if (unique.length >= 4) return unique.join(", ");
 
-  // Not enough extracted — infer from the role title.
-  const roleLower = job.role ? job.role.toLowerCase() : "";
-  let inferred = [];
-  if (roleLower.includes("front") || roleLower.includes("react")) inferred = ["JavaScript", "React", "HTML", "CSS"];
-  else if (roleLower.includes("back") || roleLower.includes("node")) inferred = ["Node.js", "SQL", "REST", "JavaScript"];
-  else if (roleLower.includes("data") || roleLower.includes("analyt")) inferred = ["Data Analysis", "SQL", "Excel", "Statistics"];
-  else if (roleLower.includes("devops") || roleLower.includes("cloud")) inferred = ["AWS", "Docker", "Kubernetes", "Linux"];
-  else if (roleLower.includes("machine") || roleLower.includes("ai") || roleLower.includes("ml")) inferred = ["Python", "Machine Learning", "TensorFlow", "Statistics"];
-  else if (roleLower.includes("qa") || roleLower.includes("test")) inferred = ["Selenium", "Testing", "QA", "Automation"];
-  else if (roleLower.includes("design") || roleLower.includes("ux") || roleLower.includes("ui")) inferred = ["UI/UX", "Figma", "Creative", "Design"];
-  else if (roleLower.includes("market") || roleLower.includes("seo")) inferred = ["Digital Marketing", "SEO", "Content", "Social Media"];
-
-  const final = [...existingClean, ...inferred, ...all].slice(0, 9);
-  if (final.length >= 3) return [...new Set(final)].join(", ");
-
-  // Ultimate fallback — a clean generic set for freshers.
-  return "Problem Solving, Communication, Teamwork, DSA, SQL";
+  const fallback = fallbackSkillsForRole(role);
+  return fallback.join(", ");
 }
 
 // ---------------------------------------------------------------------------
@@ -765,6 +809,76 @@ async function isDuplicateCandidate(chosen) {
 }
 
 /**
+ * Normalizes a job field that may arrive as a comma-separated STRING or an
+ * ARRAY (the New_Jobs source often stores skills/eligibility/etc. as arrays)
+ * into a single comma-separated string, so downstream caption/poster code
+ * that calls .split() never crashes.
+ */
+function toCommaString(value) {
+  if (Array.isArray(value)) {
+    return value.map((x) => String(x).trim()).filter(Boolean).join(", ");
+  }
+  if (value == null) return "";
+  return String(value);
+}
+
+/**
+ * Picks the next unposted job from the configured MongoDB collection.
+ * This is the default path used by the posting pipeline now that posting
+ * is driven by your own database rather than external job sources.
+ */
+async function getNextJobForPosting() {
+  try {
+    if (mongoose.connection.readyState !== 1 || !mongoose.connection.client) {
+      return null;
+    }
+
+    const db = mongoose.connection.client.db(JOBS_DB_NAME);
+    const collection = db.collection(JOBS_COLLECTION_NAME);
+
+    const doc = await collection.findOne({
+      $or: [
+        { status: "pending" },
+        { status: { $exists: false } },
+        { status: null },
+        { isPosted: false },
+        { isPosted: { $exists: false } },
+        { isPosted: null },
+      ],
+    }, {
+      sort: { createdAt: -1, _id: -1 },
+    });
+
+    if (!doc) {
+      return null;
+    }
+
+    return {
+      ...doc,
+      _id: doc._id,
+      company: toCommaString(doc.company || doc.Company || doc.organisation || doc.organization || doc.employer),
+      role: toCommaString(doc.role || doc.Role || doc.jobTitle || doc.title),
+      location: toCommaString(doc.location || doc.Location || doc.city || doc.workLocation),
+      eligibility: toCommaString(doc.eligibility || doc.Eligibility || doc.experience),
+      experience: toCommaString(doc.experience || doc.Experience),
+      jobType: toCommaString(doc.jobType || doc.JobType || doc.employmentType) || "Full-time",
+      skills: toCommaString(doc.skills || doc.Skills),
+      salaryRange: toCommaString(doc.salaryRange || doc.Salary || doc.salary),
+      description: toCommaString(doc.description || doc.Description || doc.summary),
+      applyLink: toCommaString(doc.applyLink || doc.apply_link || doc.url || doc.link),
+      resourceLink: toCommaString(doc.resourceLink || doc.resource_link || doc.sourceLink || doc.source),
+      source: doc.source || JOBS_COLLECTION_NAME,
+      sourceDb: JOBS_DB_NAME,
+      sourceCollection: JOBS_COLLECTION_NAME,
+      status: doc.status,
+    };
+  } catch (err) {
+    console.error("[Jobs] Failed to read from configured MongoDB job collection:", err.message);
+    return null;
+  }
+}
+
+/**
  * Main entry for the pipeline: fetches FRESH candidates each call and LOOPs
  * through them (in priority order) until it finds one that is NOT already in
  * the DB (no duplicate company+role+skills / no same link). The chosen job is
@@ -781,7 +895,6 @@ async function getFreshJob() {
   let chosen = null;
   for (let i = 0; i < candidates.length; i++) {
     const cand = candidates[i];
-    const fScore = fresherScore(cand.role, cand.description);
     const tier = locationTier(cand.location);
 
     // Only accept India/remote first; pull outer only as a last resort.
@@ -906,6 +1019,7 @@ async function getJobByLink(applyLink) {
 
 module.exports = {
   getFreshJob,
+  getNextJobForPosting,
   syncJobSources,
   buildMNCApplyLink,
   getJobByCompany,

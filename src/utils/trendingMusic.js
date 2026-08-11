@@ -24,119 +24,117 @@
  */
 const TRENDING_SONGS_BY_LANGUAGE = {
   Hindi: [
-    "Kesariya",
-    "Jhoome Jo Pathaan",
-    "Kala Chashma",
-    "Lut Gaye",
-    "Raataan Lambiyan",
-    "Tera Ban Jaunga",
-    "Dilbar",
-    "Bijli",
-    "Sher Khul Gaye",
-    "Ranjha",
-    "Param Sundari",
-    "O Maahi",
-    "Apna Bana Le",
-    "Jhoom",
-    "Heeriye",
-    "Tum Kya Mile",
-    "Kho Gaye Hum Kahan",
-    "Jale 2",
-    "Nain Matakka",
-    "Chaleya",
-    "O Bedardeya",
+    "Kesariya - Arijit Singh",
+    "Jhoome Jo Pathaan - Arijit Singh",
+    "Kala Chashma - Amar Arshi",
+    "Lut Gaye - Jubin Nautiyal",
+    "Raataan Lambiyan - Jubin Nautiyal",
+    "Tera Ban Jaunga - Akhil Sachdeva",
+    "Dilbar - Neha Kakkar",
+    "Bijli - Rupin Pahwa",
+    "Sher Khul Gaye - Nikhil D'Souza",
+    "Ranjha - Jasleen Royal",
+    "Param Sundari - Shreya Ghoshal",
+    "O Maahi - Arijit Singh",
+    "Apna Bana Le - Arijit Singh",
+    "Jhoom - Arijit Singh",
+    "Heeriye - Ankit Tiwari",
+    "Tum Kya Mile - Neha Kakkar",
+    "Kho Gaye Hum Kahan - Arijit Singh",
+    "Chaleya - Arijit Singh",
+    "O Bedardeya - Jubin Nautiyal",
   ],
 
   Telugu: [
-    "Oo Antava Oo Oo Antava",
-    "Saami Saami",
-    "Butta Bomma",
-    "Kurchi Madathapetti",
-    "Naatu Naatu",
-    "Chuttamalle",
-    "Fear Song",
-    "Dhop",
-    "Le Le Le",
-    "Vaathi Coming",
-    "Oo Cheliya",
-    "Pillaa Raa",
-    "Jwala Reddy",
-    "Cult of MLA",
-    "Uppena",
-    "Ninnu Kori",
-    "Shiva Shambho",
-    "Arerey Manasa",
-    "Top Lesi Poddi",
-    "Blockbuster",
+    "Oo Antava Oo Oo Antava - Anirudh Ravichander",
+    "Saami Saami - Anirudh Ravichander",
+    "Butta Bomma - Armaan Malik",
+    "Kurchi Madathapetti - SS Thaman",
+    "Naatu Naatu - Rahul Sipligunj",
+    "Chuttamalle - Devi Sri Prasad",
+    "Fear Song - Vishal Mishra",
+    "Dhop - Yazin Nizar",
+    "Le Le Le - Anirudh Ravichander",
+    "Vaathi Coming - Anirudh Ravichander",
+    "Oo Cheliya - Sid Sriram",
+    "Pillaa Raa - Anurag Kulkarni",
+    "Jwala Reddy - Devi Sri Prasad",
+    "Cult of MLA - Anirudh Ravichander",
+    "Uppena - Sid Sriram",
+    "Ninnu Kori - Haricharan",
+    "Shiva Shambho - Anirudh Ravichander",
+    "Arerey Manasa - Vijay Yesudas",
+    "Top Lesi Poddi - M.M. Keeravani",
+    "Blockbuster - Vijay Prakash",
   ],
 
   Tamil: [
-    "Arabic Kuthu",
-    "Jalabulajangu",
-    "Kutty Story",
-    "Needhaana Oru Divasam",
-    "Vaa Vaathi",
-    "Manjal Veyil",
-    "Pona Porandhom",
-    "Rowdy Baby",
-    "High On Love",
-    "Venom - Puthu Paatu",
-    "Adiye",
-    "Kadhal Psycho",
-    "Ordinary Person",
-    "Inthandham",
-    "Vaathi Coming",
-    "Engeyo Ketta Kural",
-    "Kodiyil Oruvan",
-    "Thenmozhi",
-    "Jigarthanda",
-    "Ranjithame",
+    "Arabic Kuthu - Anirudh Ravichander",
+    "Jalabulajangu - Dhanush",
+    "Kutty Story - Anirudh Ravichander",
+    "Needhaana Oru Divasam - Anirudh Ravichander",
+    "Vaa Vaathi - Anirudh Ravichander",
+    "Manjal Veyil - Yuvan Shankar Raja",
+    "Pona Porandhom - Harris Jayaraj",
+    "Rowdy Baby - Dhanush",
+    "High On Love - Anirudh Ravichander",
+    "Venom - Puthu Paatu - Anirudh Ravichander",
+    "Adiye - Sid Sriram",
+    "Kadhal Psycho - Anirudh Ravichander",
+    "Ordinary Person - Dhanush",
+    "Inthandham - Anirudh Ravichander",
+    "Vaathi Coming - Anirudh Ravichander",
+    "Engeyo Ketta Kural - Anirudh Ravichander",
+    "Kodiyil Oruvan - Anirudh Ravichander",
+    "Thenmozhi - Anirudh Ravichander",
+    "Jigarthanda - Harris Jayaraj",
+    "Ranjithame - Anirudh Ravichander",
   ],
 
   Malayalam: [
-    "Pulimurugan Theme",
-    "Theeran Theme",
-    "Vettam",
-    "Kannur Squad",
-    "Njanum Njanum",
-    "Kotha",
-    "Uyiril Thodum",
-    "Ole Ole",
-    "Ra Ra Rajakumari",
-    "Malare",
-    "Neeyethra",
-    "Etho Mazhayil",
-    "Panipaali",
-    "Akaleyo Nee",
-    "Manikya Kuyile",
-    "Koodamela Koodevachi",
-    "Onakka Munthiri",
-    "Thenkasi Pattanam",
-    "Kannadi Penne",
-    "Chemban",
+    "Pulimurugan Theme - Gopi Sundar",
+    "Theeran Theme - Ghibran",
+    "Vettam - Rahul Raj",
+    "Kannur Squad - Dawn Vincent",
+    "Njanum Njanum - Christian J Menon",
+    "Kotha - Varun Unni",
+    "Uyiril Thodum - Hesham Abdul Wahab",
+    "Ole Ole - M4SONIC",
+    "Ra Ra Rajakumari - Vivek Sagar",
+    "Malare - Vijay Yesudas",
+    "Neeyethra - Shreya Ghoshal",
+    "Etho Mazhayil - K. S. Harisankar",
+    "Panipaali - Sooraj Santhosh",
+    "Akaleyo Nee - Shaan Rahman",
+    "Manikya Kuyile - Vijith Nandakumar",
+    "Koodamela Koodevachi - Shaan Rahman",
+    "Onakka Munthiri - Nikhil Mathew",
+    "Thenkasi Pattanam - K. S. Harisankar",
+    "Kannadi Penne - Gopi Sundar",
+    "Chemban - Prashant Pillai",
   ],
 
   Kannada: [
-    "Appu",
-    "Ninna Danake",
-    "Melody",
-    "Gaitonde",
-    "Jai Maruthi",
-    "Idu Bhoomi",
-    "Kanasina Loka",
-    "Dange",
-    "Baanadariyalli",
-    "Manasa",
-    "Nammooralli",
-    "Neene Neene",
-    "Kanasugara",
-    "Yaare Koogu",
-    "Chamak",
-    "Sampige",
-    "Belagali",
-    "Kannada Naada",
-    "Mouna Raagam",
-    "Kannalle",
+    "Appu - Puneeth Rajkumar",
+    "Ninna Danake - Vijay Prakash",
+    "Melody - Sonu Nigam",
+    "Gaitonde - Armaan Malik",
+    "Jai Maruthi - Vijay Prakash",
+    "Idu Bhoomi - Armaan Malik",
+    "Kanasina Loka - Hemanth Kumar",
+    "Dange - Chandan Shetty",
+    "Baanadariyalli - Sanjith Hegde",
+    "Manasa - Vijay Prakash",
+    "Nammooralli - V. Harikrishna",
+    "Neene Neene - Shreya Ghoshal",
+    "Kanasugara - Javed Ali",
+    "Yaare Koogu - Vijay Prakash",
+    "Chamak - Vijay Prakash",
+    "Sampige - Sonu Nigam",
+    "Belagali - Rajesh Krishnan",
+    "Kannada Naada - Hemanth Kumar",
+    "Mouna Raagam - Sonu Nigam",
+    "Kannalle - Vijay Prakash",
   ],
 
   English: [
@@ -163,26 +161,26 @@ const TRENDING_SONGS_BY_LANGUAGE = {
   ],
 
   Punjabi: [
-    "Excuses",
-    "Love You Too (Afreen Afreen)",
-    "Lover (Diljit Dosanjh)",
-    "Naina",
-    "Chandigarh Mein",
-    "Bajre Da Sitta",
-    "Titli",
-    "Tere Naal Nachna",
-    "Case",
-    "Kaller",
-    "Na Na Na",
-    "Baller",
-    "White Brown Black",
-    "Softly",
-    "Malwa Block",
-    "Kina Chir",
-    "Pretty",
-    "Jhaanjhar",
-    "Aa",
-    "Taur",
+    "Excuses - AP Dhillon",
+    "Love You Too (Afreen Afreen) - Rahat Fateh Ali Khan",
+    "Lover - Diljit Dosanjh",
+    "Naina - Indeep Bakshi",
+    "Chandigarh Mein - Benny Dayal",
+    "Bajre Da Sitta - Asees Kaur",
+    "Titli - Harrdy Sandhu",
+    "Tere Naal Nachna - Guru Randhawa",
+    "Case - Geeta Zaildar",
+    "Kaller - Tanishk Bagchi",
+    "Na Na Na - Neha Kakkar",
+    "Baller - Jass Manak",
+    "White Brown Black - Ikka",
+    "Softly - Karan Aujla",
+    "Malwa Block - Jagjit Singh",
+    "Kina Chir - Jass Bajwa",
+    "Pretty - Amrit Maan",
+    "Jhaanjhar - Mankirt Aulakh",
+    "Aa - Neha Kakkar",
+    "Taur - Diljit Dosanjh",
   ],
 };
 
@@ -225,6 +223,26 @@ const MOOD_SONGS = {
 
 const MOODS = Object.keys(MOOD_SONGS);
 
+function normalizeSongName(name) {
+  if (!name || typeof name !== "string") return "";
+  return name
+    .trim()
+    .replace(/\s*\([^)]*\)\s*$/g, "")
+    .replace(/\s*-\s*[^-]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildAudioSong(songName, language) {
+  const normalized = normalizeSongName(songName);
+  return {
+    songName: normalized,
+    audioName: normalized,
+    audioAssetId: "",
+    language,
+  };
+}
+
 /**
  * Picks a random trending song from a random language.
  * Returns an object with the song name (used for `audio_name`) and the
@@ -242,14 +260,14 @@ function pickRandomSong(mood) {
   if (preferredMood && MOOD_SONGS[preferredMood]) {
     const list = MOOD_SONGS[preferredMood];
     const songName = list[Math.floor(Math.random() * list.length)];
-    return { songName, language: `mood:${preferredMood}` };
+    return buildAudioSong(songName, `mood:${preferredMood}`);
   }
 
   // No mood preference or not found — pick random language as before.
   const language = LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)];
   const songs = TRENDING_SONGS_BY_LANGUAGE[language];
   const songName = songs[Math.floor(Math.random() * songs.length)];
-  return { songName, language };
+  return buildAudioSong(songName, language);
 }
 
 /**
@@ -264,7 +282,7 @@ function pickRandomSongByLanguage(language) {
     return pickRandomSong();
   }
   const songName = songs[Math.floor(Math.random() * songs.length)];
-  return { songName, language };
+  return buildAudioSong(songName, language);
 }
 
 module.exports = {

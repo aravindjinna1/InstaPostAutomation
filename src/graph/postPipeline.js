@@ -6,6 +6,7 @@
 
 require("@langchain/langgraph/zod");
 const { z } = require("zod");
+const mongoose = require("mongoose");
 const { StateGraph, END } = require("@langchain/langgraph");
 
 const { generateCaption, generateImage, generateImageWithGemini, generateJobPost } = require("../services/aiService");
@@ -16,7 +17,7 @@ const { buildRealJobCaption, buildJobImagePrompt } = require("../utils/jobPrompt
 const { imageToReelVideo } = require("../services/videoService");
 const { pickRandomSong } = require("../utils/trendingMusic");
 const { renderJobPoster } = require("../services/posterService");
-const { getFreshJob } = require("../services/jobDataService");
+const { getNextJobForPosting } = require("../services/jobDataService");
 
 const Post = require("../models/Post");
 const Job = require("../models/Job");
@@ -39,6 +40,7 @@ const PostState = z.object({
   imageUrl: z.string().optional(),
   videoUrl: z.string().optional(),
   audioName: z.string().optional(),
+  audioAssetId: z.string().optional(),
   igMediaId: z.string().optional(),
   error: z.string().optional(),
   failedStage: z.string().optional(),
@@ -57,18 +59,16 @@ async function writeLog(postId, stage, status, message) {
 }
 
 /**
- * Node 1: Fetch a FRESH real-time job from multiple external sources and
+ * Node 1: Pick the next unposted job from the app's own database and
  * build an engaging Instagram caption from it. The caption includes the real
- * Apply Link + resource link so followers can apply directly. Only the chosen
- * job is persisted (with its apply link) — fresh candidates are fetched on
- * every run, never reused from storage.
+ * Apply Link so followers can apply directly. This keeps posting tied to your
+ * own job data source rather than the legacy external fetchers.
  */
 async function generateCaptionNode(state) {
-  // Fetch a fresh job (live multi-source pull, prioritized for India/freshers).
-  const job = await getFreshJob();
+  const job = await getNextJobForPosting();
 
   if (!job) {
-    const err = "No job could be fetched from the external source or fallback";
+    const err = "No unposted job found in the database";
     await writeLog(state.postId, "job_generation", "failure", err);
     return { error: err, failedStage: "job_generation" };
   }
@@ -167,8 +167,9 @@ async function uploadImageNode(state) {
   }
 
   // Convert the poster into a silent Reel video. The trending song is NOT
-  // embedded here - Instagram attaches its own licensed track via audio_name,
-  // which is the safe, legit way to add real trending music.
+  // embedded here - Instagram attaches its own licensed track via audio_name
+  // or audio_asset_id. This is the safe, legit path to use Instagram's built-in
+  // music catalog rather than shipping audio directly in the file.
   const video = await imageToReelVideo({
     imageBuffer: Buffer.from(state.imageBase64, "base64"),
   });
@@ -193,7 +194,8 @@ async function uploadImageNode(state) {
   await writeLog(state.postId, "video_upload", "success", result.publicUrl);
   return {
     videoUrl: result.publicUrl,
-    audioName: song ? song.songName : "",
+    audioName: song ? song.audioName || song.songName : "",
+    audioAssetId: song ? song.audioAssetId || "" : "",
   };
 }
 
@@ -212,6 +214,7 @@ async function publishToInstagramNode(state) {
     videoUrl: state.videoUrl,
     caption: state.caption,
     audioName: state.audioName,
+    audioAssetId: state.audioAssetId,
   });
 
   if (!result.success) {
@@ -234,15 +237,35 @@ async function finalizeNode(state) {
       errorMessage: `[${state.failedStage}] ${state.error}`,
     });
 } else {
-    // Link the stored real job to this post and mark it as posted so it
+    // Link the selected job to this post and mark it as posted so it
     // won't be reused for a future post.
     const job = state.job;
     if (job && job._id) {
-      await Job.findByIdAndUpdate(job._id, {
-        isPosted: true,
-        postId: state.postId,
-        postedDate: new Date(),
-      });
+      if (job.sourceDb && job.sourceCollection) {
+        try {
+          const db = mongoose.connection.client.db(job.sourceDb);
+          const collection = db.collection(job.sourceCollection);
+          await collection.updateOne(
+            { _id: job._id },
+            {
+              $set: {
+                status: "posted",
+                isPosted: true,
+                postId: state.postId,
+                postedDate: new Date(),
+              },
+            }
+          );
+        } catch (err) {
+          console.error("[Pipeline] Failed to update source job document:", err.message);
+        }
+      } else {
+        await Job.findByIdAndUpdate(job._id, {
+          isPosted: true,
+          postId: state.postId,
+          postedDate: new Date(),
+        });
+      }
     }
 
     await Post.findByIdAndUpdate(state.postId, {

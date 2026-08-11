@@ -41,6 +41,7 @@ async function createReelsContainer({
   videoUrl,
   caption,
   audioName,
+  audioAssetId,
 }) {
   try {
     const params = {
@@ -51,9 +52,11 @@ async function createReelsContainer({
       access_token: accessToken,
     };
 
-    // If a trending song name is provided, attach it so Instagram adds the
-    // licensed track to the Reel. Leaving it out keeps the Reel silent.
-    if (audioName) {
+    // Attach Instagram's licensed music. Prefer an explicit audio asset ID when
+    // available, otherwise pass the best matching track name from the IG catalog.
+    if (audioAssetId) {
+      params.audio_asset_id = audioAssetId;
+    } else if (audioName) {
       params.audio_name = audioName;
     }
 
