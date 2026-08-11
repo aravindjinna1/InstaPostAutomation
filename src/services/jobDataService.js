@@ -992,6 +992,8 @@ async function syncJobSources() {
   const outerCount = candidates.filter((c) => locationTier(c.location) === 0).length;
   const fresherCount = candidates.filter((c) => fresherScore(c.role, c.description) > 0).length;
 
+  // Return a summary of the counts for reporting purposes.
+
   return {
     total: candidates.length,
     bySource,

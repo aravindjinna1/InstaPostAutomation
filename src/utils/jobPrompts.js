@@ -231,6 +231,8 @@ function buildJobImagePrompt(job) {
   const salary = job.salaryRange || "Competitive package";
   const colors = getCompanyColors(job.company);
 
+// The prompt below is designed to instruct the AI image generator to create a high-quality, professional recruitment poster for Instagram Reels. It specifies the layout, branding
+
   return `Create a premium, modern, highly polished corporate recruitment poster for Instagram Reels. 9:16 vertical format, 1080x1920. It must look like it was made by a professional graphic designer for a Fortune 500 recruitment campaign. Clean white background with subtle dotted textures, rounded corners, smooth gradients, soft shadows, premium spacing. Leave safe margins (80-120px) at top and bottom. Trustworthy, modern, minimal, highly readable.
 
 BRAND COLORS: use the company theme colors for every major UI section, not only the top header. Base the design on the company primary and secondary brand colors provided, with white and subtle accent tones for contrast. Typography: modern geometric sans-serif (Poppins/Montserrat/Manrope), headings extra bold, uppercase.
