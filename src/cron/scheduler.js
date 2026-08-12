@@ -80,23 +80,32 @@ async function triggerDailyPost() {
 
 /**
  * Registers the recurring daily cron job.
- * Cron expression is configurable via DAILY_POST_CRON in .env
- * (defaults to 9:00 AM server time if not set).
+ * Uses one or two cron expressions in India Standard Time. Set
+ * DAILY_POST_CRON_1 and DAILY_POST_CRON_2 to schedule separate half-hour
+ * slots. The legacy DAILY_POST_CRON remains supported for existing setups.
  */
 function startDailyPostCron() {
-  const cronExpression = process.env.DAILY_POST_CRON || "0 */2 * * *";
+  const expressions = [
+    process.env.DAILY_POST_CRON_1,
+    process.env.DAILY_POST_CRON_2,
+  ].filter(Boolean);
+  const schedules = expressions.length
+    ? expressions
+    : [process.env.DAILY_POST_CRON || "0 6-23 * * *"];
 
-  if (!cron.validate(cronExpression)) {
-    console.error(`[Cron] Invalid cron expression: ${cronExpression} - job not scheduled`);
-    return;
+  for (const cronExpression of schedules) {
+    if (!cron.validate(cronExpression)) {
+      console.error(`[Cron] Invalid daily-post expression: ${cronExpression} - job not scheduled`);
+      continue;
+    }
+
+    cron.schedule(cronExpression, async () => {
+      console.log(`[Cron] Daily post job triggered at ${new Date().toISOString()}`);
+      await triggerDailyPost();
+    }, { timezone: "Asia/Kolkata" });
+
+    console.log(`[Cron] Daily post job scheduled (Asia/Kolkata): ${cronExpression}`);
   }
-
-  cron.schedule(cronExpression, async () => {
-    console.log(`[Cron] Daily post job triggered at ${new Date().toISOString()}`);
-    await triggerDailyPost();
-  });
-
-  console.log(`[Cron] Daily post job scheduled with expression: ${cronExpression}`);
 }
 
 /**
