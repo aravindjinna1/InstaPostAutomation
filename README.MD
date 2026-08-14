@@ -3,6 +3,16 @@
 
 Backend for an automated Instagram poster that generates a daily image and caption, uploads the image, and publishes it to one Instagram Business or Creator account using Instagram Login.
 
+## Local music playlist for Reels
+
+Put the audio files you are licensed to use in the `music/` folder. Name them in
+the exact playback order, for example `01-intro.mp3`, `02-tips.mp3`, and
+`03-outro.mp3`. Each new Reel embeds the next file, reaches the final file, and
+then continues again from `01-intro.mp3`. The current position is saved in
+MongoDB, so restarting the server does not restart the playlist. Supported
+formats are MP3, M4A, AAC, WAV, OGG, and FLAC. You can choose another folder
+with `LOCAL_MUSIC_DIRECTORY` in `.env`.
+
 ## Overview
 
 - Generates captions with Gemini

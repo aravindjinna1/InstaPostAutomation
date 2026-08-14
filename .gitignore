@@ -87,6 +87,11 @@ temp/
 # =========================
 # uploads/
 
+# Downloaded Reel audio is local-only. Keep music/.gitkeep so the folder is
+# available after a fresh clone.
+music/*
+!music/.gitkeep
+
 # =========================
 # Miscellaneous
 # =========================

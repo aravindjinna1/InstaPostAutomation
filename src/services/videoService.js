@@ -6,12 +6,8 @@
  * seconds (no animation - just a clean image-based Reel), which is
  * what the user wants for maximum reach with a minimal, clean look.
  *
- * The MP4 is intentionally SILENT (no embedded audio track). The real,
- * licensed trending song is attached by Instagram itself via the
- * `audio_name` parameter passed to the Reels API (see instagramService.js
- * and trendingMusic.js). Embedding copyrighted tracks directly is not
- * legal, and synthetic beats sound bad - so we leave the audio to
- * Instagram's own music catalog.
+ * When a local audio file is provided, it is embedded into the MP4. Instagram
+ * then publishes exactly that audio as the Reel's original audio.
  *
  * Uses ffmpeg-static (bundled ffmpeg binary - no global install needed)
  * to encode the image into an H.264 MP4 compatible with Instagram.
@@ -33,13 +29,11 @@ const VIDEO_HEIGHT = 1920;
 const FPS = 30;
 
 /**
- * Creates a silent MP4 from the image. Keeping the Reel silent lets
- * Instagram attach a real licensed trending song (via audio_name) so the
- * account owner gets genuine trending music without copyright issues.
+ * Creates an MP4 from the image, optionally with a local audio file.
  *
  * Returns { success, buffer }.
  */
-function imageToReelVideo({ imageBuffer }) {
+function imageToReelVideo({ imageBuffer, audioFile }) {
   return new Promise((resolve) => {
     const inputFile = path.join(os.tmpdir(), `reel-input-${Date.now()}.png`);
     const outputFile = path.join(os.tmpdir(), `reel-output-${Date.now()}.mp4`);
@@ -52,7 +46,7 @@ function imageToReelVideo({ imageBuffer }) {
       // Write the poster image to a temp file
       fs.writeFileSync(inputFile, imageBuffer);
 
-      encodeVideo(inputFile, outputFile)
+      encodeVideo(inputFile, outputFile, audioFile)
         .then((result) => {
           cleanup([inputFile, outputFile]);
           resolve(result);
@@ -69,19 +63,27 @@ function imageToReelVideo({ imageBuffer }) {
 }
 
 /**
- * Encodes a silent video from the input image. No audio stream is added.
+ * Encodes the image and, if supplied, loops/trims audio to the Reel length.
  * Returns { success, buffer }.
  */
-function encodeVideo(inputFile, outputFile) {
+function encodeVideo(inputFile, outputFile, audioFile) {
   return new Promise((resolve) => {
     // A PNG is a single frame. `-loop 1` is essential: without it FFmpeg
     // outputs one frame (~0.03 sec at 30fps), even when `-t` is set.
+    // FFmpeg requires every input (including the optional audio file) before
+    // output options such as -vf and -c:v.
     const args = [
       "-y",
       "-loop", "1",
       "-framerate", String(FPS),
       "-i", inputFile,
-      "-t", String(REEL_DURATION_SECONDS),
+    ];
+
+    if (audioFile) {
+      args.push("-stream_loop", "-1", "-i", audioFile);
+    }
+
+    args.push(
       "-vf",
       `scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:force_original_aspect_ratio=decrease,pad=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p`,
       "-sws_flags", "lanczos",
@@ -90,12 +92,24 @@ function encodeVideo(inputFile, outputFile) {
       "-profile:v", "high",
       "-level", "4.0",
       "-crf", "23",
-      "-r", String(FPS),
-      "-an", // no audio
-      "-movflags", "+faststart",
-      "-f", "mp4",
-      outputFile,
-    ];
+      "-r", String(FPS)
+    );
+
+    if (audioFile) {
+      // A short track repeats; a longer track is trimmed. This keeps every
+      // generated Reel exactly REEL_DURATION_SECONDS long.
+      args.push(
+        "-t", String(REEL_DURATION_SECONDS),
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "44100",
+        "-ac", "2"
+      );
+    } else {
+      args.push("-t", String(REEL_DURATION_SECONDS), "-an");
+    }
+
+    args.push("-movflags", "+faststart", "-f", "mp4", outputFile);
 
     const ffmpeg = spawn(ffmpegPath, args);
 
@@ -113,7 +127,7 @@ function encodeVideo(inputFile, outputFile) {
       if (code === 0) {
         try {
           const buffer = fs.readFileSync(outputFile);
-          resolve({ success: true, buffer, hasAudio: false });
+          resolve({ success: true, buffer, hasAudio: Boolean(audioFile) });
         } catch (err) {
           resolve({ success: false, error: err.message });
         }

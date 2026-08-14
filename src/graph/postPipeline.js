@@ -15,7 +15,7 @@ const { postImageToInstagram, postReelToInstagram } = require("../services/insta
 const { getDailyPrompt } = require("../utils/promptrotationdaily");
 const { buildRealJobCaption, buildJobImagePrompt, getCompanyBrandColors, getPosterTheme } = require("../utils/jobPrompts");
 const { imageToReelVideo } = require("../services/videoService");
-const { pickRandomSong } = require("../utils/trendingMusic");
+const { getNextLocalMusicTrack } = require("../services/localMusicService");
 const { renderJobPoster } = require("../services/posterService");
 const { getNextJobForPosting } = require("../services/jobDataService");
 
@@ -185,28 +185,25 @@ async function generateImageNode(state) {
  * short static MP4 (no animation) and upload it as a video resource.
  */
 async function uploadImageNode(state) {
-  // Pick a random trending song from a random Indian language (Telugu,
-  // Hindi, Tamil, Malayalam, Kannada, English, Punjabi, etc.) so each Reel
-  // gets a different trending track. Instagram tries to attach its licensed
-  // version via audio_name.
-  // Respect an optional preferred mood via env `PREFERRED_MOOD` (e.g. 'motivational' or 'energetic')
-  const preferredMood = process.env.PREFERRED_MOOD || "";
-  const song = pickRandomSong(preferredMood);
-  if (song && song.songName) {
+  // Reserve the next local track in filename order. The persistent cursor is
+  // atomic, so restarts and overlapping posting jobs cannot reuse a slot.
+  const track = await getNextLocalMusicTrack();
+  if (track) {
     await writeLog(
       state.postId,
       "music_selection",
       "success",
-      `${song.songName} (${song.language})`
+      `${track.fileName} (${track.position}/${track.total})`
     );
+  } else {
+    await writeLog(state.postId, "music_selection", "success", "No local music files found; publishing without audio");
   }
 
-  // Convert the poster into a silent Reel video. The trending song is NOT
-  // embedded here - Instagram attaches its own licensed track via audio_name
-  // or audio_asset_id. This is the safe, legit path to use Instagram's built-in
-  // music catalog rather than shipping audio directly in the file.
+  // Embed the selected file so Instagram receives it as the Reel's original
+  // audio. Only place tracks here that you are allowed to use.
   const video = await imageToReelVideo({
     imageBuffer: Buffer.from(state.imageBase64, "base64"),
+    audioFile: track ? track.filePath : undefined,
   });
 
   if (!video.success) {
@@ -229,18 +226,16 @@ async function uploadImageNode(state) {
   await writeLog(state.postId, "video_upload", "success", result.publicUrl);
   return {
     videoUrl: result.publicUrl,
-    audioName: song ? song.audioName || song.songName : "",
-    audioAssetId: song ? song.audioAssetId || "" : "",
+    audioName: track ? track.fileName : "",
+    audioAssetId: "",
   };
 }
 
 /**
  * Node 4: Publish to Instagram as a REEL.
- * Reels get far wider reach than feed posts. The selected trending song
- * (audio_name) is passed to Instagram, which attaches its OWN licensed
- * version of the track from its music catalog - the safe, legit way to
- * add trending audio. If the song isn't in IG's catalog the Reel is
- * still published (just without that specific audio).
+ * The selected local track is already embedded in the MP4, so it is published
+ * as the Reel's original audio. Do not send the filename as `audio_name`:
+ * that parameter is only for Instagram catalog tracks.
  */
 async function publishToInstagramNode(state) {
   const result = await postReelToInstagram({
@@ -248,8 +243,6 @@ async function publishToInstagramNode(state) {
     accessToken: state.accessToken,
     videoUrl: state.videoUrl,
     caption: state.caption,
-    audioName: state.audioName,
-    audioAssetId: state.audioAssetId,
   });
 
   if (!result.success) {
