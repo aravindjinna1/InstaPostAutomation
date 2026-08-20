@@ -96,9 +96,20 @@ function startDailyPostCron() {
     process.env.DAILY_POST_CRON_1,
     process.env.DAILY_POST_CRON_2,
   ].filter(Boolean);
+
+
+  // const schedules = expressions.length
+  //   ? expressions
+  //   : [process.env.DAILY_POST_CRON || "0 6-23 * * *"];
+
   const schedules = expressions.length
-    ? expressions
-    : [process.env.DAILY_POST_CRON || "0 6-23 * * *"];
+  ? expressions
+  : [
+      process.env.DAILY_POST_CRON_1 ||
+        "0 7,11,15 * * *",
+      process.env.DAILY_POST_CRON_2 ||
+        "0 19,23 * * *",
+    ];
 
   for (const cronExpression of schedules) {
     if (!cron.validate(cronExpression)) {
