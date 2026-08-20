@@ -69,8 +69,15 @@ async function triggerDailyPost() {
     accessToken: decryptedToken,
   });
 
-  if (finalState.error) {
-    console.error(`[Cron] Pipeline failed at ${finalState.failedStage}:`, finalState.error);
+  // Only an actual published Instagram media id counts as success. A created
+  // container, upload success, or a plain response without an error is NOT a
+  // successful post.
+  if (finalState.error || !finalState.igMediaId) {
+    console.error(
+      `[Cron] Pipeline failed at ${finalState.failedStage || "unknown"}: ${
+        finalState.error || "Instagram did not return a published media id"
+      }`
+    );
   } else {
     console.log(`[Cron] Pipeline succeeded - IG media ID: ${finalState.igMediaId}`);
   }

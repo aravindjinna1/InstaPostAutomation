@@ -204,40 +204,95 @@ Make the applyLink look like a real careers URL.
 }
 
 /**
- * Builds an engaging Instagram caption from a REAL job object (fetched from
- * an external source). The REAL Apply Link + Resource link are included
- * directly in the caption so followers can tap and apply immediately —
- * no more commenting/asking for the link.
+ * Builds a CONCISE Instagram caption from the job's STRUCTURED fields only.
+ *
+ * It deliberately excludes the full scraped article/description (which can
+ * contain FAQs, a table of contents, source-site text, unrelated links and
+ * repeated job info). It also never exposes the source/apply/resource URLs,
+ * keeping captions short and compliant with the project requirement.
+ *
+ * Every value is trimmed at a natural sentence boundary if it is unexpectedly
+ * long, and the final caption is capped at MAX_CAPTION_LENGTH as a final
+ * safety net (prefer a properly shortened caption over blind truncation).
  */
-function buildRealJobCaption(job) {
-  const eligibility = job.eligibility || job.experience || "Freshers friendly";
-  const skills =
-    Array.isArray(job.skills)
-      ? job.skills.map((s) => String(s).trim()).filter(Boolean).join(", ")
-      : (job.skills || "Problem solving, Communication, Fundamentals");
-  const apply = job.applyLink || "";
-  const resource = job.resourceLink || "";
 
-  return [
-    `🚀 NEW JOB ALERT | ${job.role || ""}`,
-    ``,
-    `🏢 Company: ${job.company || ""}`,
-    `📍 Location: ${job.location || "N/A"}`,
-    `💼 Eligibility: ${eligibility}`,
-    `🕒 Type: ${job.jobType || "Full-time"}`,
-    `🛠 Skills: ${skills}`,
-    `💰 Salary: ${job.salaryRange || "Competitive package"}`,
-    ``,
-    `📌 ${job.description || ""}`,
-    ``,
-    // Links are stored in the database but intentionally omitted from the
-    // Instagram caption to avoid exposing source/apply URLs publicly.
-    `Save & apply right away ✅`,
-    ``,
-    `Follow for daily #JobUpdates #TechJobs #Hiring #IndiaJobs #ITJobs ${job.hashtags || ""}`,
-  ]
-    .filter((line) => line !== "")
-    .join("\n");
+// Instagram allows 2200; we use a comfortably smaller target so the caption
+// is always valid even with accents/emoji counting as extra bytes.
+const MAX_CAPTION_LENGTH = 1500;
+
+/** Trims a single job value at a natural boundary if it is unreasonably long. */
+function capField(value, max = 500) {
+  const s = String(value || "").trim();
+  if (!s) return "";
+  if (s.length <= max) return s;
+  const head = s.slice(0, max);
+  const cut = Math.max(
+    head.lastIndexOf(". "),
+    head.lastIndexOf("! "),
+    head.lastIndexOf("? "),
+    head.lastIndexOf(", "),
+    head.lastIndexOf("\n")
+  );
+  if (cut > 0) return s.slice(0, cut + 1).trim();
+  return head.slice(0, head.lastIndexOf(" ")) + "…";
+}
+
+/** Normalizes job.skills (array or comma string) into a cleaned, capped string. */
+function capSkills(value, max = 400) {
+  const list = Array.isArray(value)
+    ? value.map((s) => String(s).trim()).filter(Boolean)
+    : String(value || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+  return capField(list.join(", "), max);
+}
+
+/** Safety-net: trims the assembled caption to MAX_CAPTION_LENGTH, at a boundary. */
+function capCaption(caption, max = MAX_CAPTION_LENGTH) {
+  if (!caption || caption.length <= max) return caption || "";
+  const head = caption.slice(0, max);
+  const cut = Math.max(
+    head.lastIndexOf("\n"),
+    head.lastIndexOf(". "),
+    head.lastIndexOf("! "),
+    head.lastIndexOf("? ")
+  );
+  if (cut > max * 0.55) return caption.slice(0, cut).trim() + "…";
+  const sp = head.lastIndexOf(" ");
+  return (sp > 0 ? head.slice(0, sp) : head) + "…";
+}
+
+function buildRealJobCaption(job) {
+  const role = capField(job.role, 120);
+  const company = capField(job.company, 120);
+  const location = capField(job.location, 120);
+  const experience = capField(job.experience, 120);
+  const eligibility = capField(job.eligibility || "", 220);
+  const jobType = capField(job.jobType, 60);
+  const skills = capSkills(job.skills, 400);
+  const salary = capField(job.salaryRange, 160);
+
+  const lines = [`🎉 JOB ALERT${role ? ` | ${role}` : ""}`];
+  if (company) lines.push(`🏢 Company: ${company}`);
+  if (location) lines.push(`📍 Location: ${location}`);
+  // Show experience and eligibility only where they are genuinely different,
+  // to avoid repeating the same value twice in the caption.
+  if (experience && (!eligibility || experience !== eligibility)) {
+    lines.push(`💼 Experience: ${experience}`);
+  }
+  if (eligibility) lines.push(`🎓 Eligibility: ${eligibility}`);
+  if (jobType) lines.push(`🕒 Type: ${jobType}`);
+  if (skills) lines.push(`🛠 Skills: ${skills}`);
+  if (salary) lines.push(`💰 Package: ${salary}`);
+  lines.push(
+    "",
+    "🚀 A great next step to start or advance your career — don't miss it!",
+    "",
+    "Follow for daily verified #JobUpdates #Hiring #IndiaJobs #Careers #TechJobs"
+  );
+
+  return capCaption(lines.join("\n"));
 }
 
 /**
@@ -301,5 +356,6 @@ module.exports = {
   buildJobGenerationPrompt,
   buildRealJobCaption,
   buildJobImagePrompt,
+  MAX_CAPTION_LENGTH,
 };
 

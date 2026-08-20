@@ -54,12 +54,24 @@ async function runDailyPost() {
 if (require.main === module) {
   runDailyPost()
     .then(async (result) => {
-      console.log('✅ Daily post complete:', result || 'done');
+      const failed = !result || result.error || !result.igMediaId;
+      if (failed) {
+        console.error('❌ Instagram posting failed');
+        console.error(`Stage: ${result?.failedStage || 'unknown'}`);
+        console.error(`Reason: ${result?.error || 'Instagram did not return a published media id'}`);
+        await mongoose.connection.close();
+        process.exit(1);
+        return;
+      }
+      console.log('✅ Instagram post published');
+      console.log(`Instagram Media ID: ${result.igMediaId}`);
       await mongoose.connection.close();
       process.exit(0);
     })
     .catch(async (err) => {
-      console.error('❌ Daily post failed:', err.message);
+      console.error('❌ Instagram posting failed');
+      console.error('Stage:', 'exception');
+      console.error('Reason:', err.message);
       if (err.stack) console.error(err.stack);
       try {
         await mongoose.connection.close();

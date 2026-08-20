@@ -823,6 +823,76 @@ function toCommaString(value) {
   return String(value);
 }
 
+// Section labels the external scraper's parser sometimes fails to split on,
+// fusing e.g. company + role into one value ("EYRole: Analyst – Assurance …")
+// or location + skills into one ("Bengaluru, IndiaKey Skills: SQL …").
+const JOB_FIELD_BOUNDARIES = [
+  "role:",
+  "title:",
+  "designation:",
+  "position:",
+  "job title:",
+  "location:",
+  "experience:",
+  "qualification:",
+  "eligibility:",
+  "key skills:",
+  "skills:",
+  "skill:",
+  "salary:",
+  "stipend:",
+  "ctc:",
+  "package:",
+  "job type:",
+  "employment type:",
+  "education:",
+  "degree:",
+  "batch:",
+  "apply:",
+  "how to apply:",
+  "application deadline:",
+  "last date:",
+  "requirements:",
+  "responsibilities:",
+  "job description:",
+  "about the job:",
+  "about the company:",
+  "about:",
+];
+
+/**
+ * Cleans a structured job field that may have fused two logical sections into
+ * a single string (e.g. company="EYEYRole: Analyst – Assurance …"). Cuts the
+ * value at the earliest known section label so downstream caption/poster code
+ * receives a clean, single-purpose value. Does not invent data — it only
+ * discards clearly-separate fragments that belong to a different field.
+ */
+function cleanJobField(value) {
+  const s = toCommaString(value).trim();
+  if (!s) return s;
+  let cut = s.length;
+  const lower = s.toLowerCase();
+  for (const label of JOB_FIELD_BOUNDARIES) {
+    const idx = lower.indexOf(label);
+    if (idx > 0 && idx < cut) cut = idx;
+  }
+  let out = s.slice(0, cut).trim();
+  // Drop trailing delimiters that often trail a split value ("EY," / "EY |").
+  out = out.replace(/[\s;,|:\u2014\u2013•-]+$/, "").trim();
+  return out;
+}
+
+/**
+ * When the external scraper merged the role into the company value
+ * (e.g. company="EYRole: Analyst – Assurance"), recover the role fragment.
+ * Returns "" if there is no endpoint, so the caller can keep the original.
+ */
+function extractRoleFromMerged(companyRaw) {
+  const s = toCommaString(companyRaw);
+  const m = /(?:role|title|designation|position|job title)\s*:\s*([^;\n]+)/i.exec(s);
+  return m ? m[1].trim() : "";
+}
+
 /**
  * Picks the next unposted job from the configured MongoDB collection.
  * This is the default path used by the posting pipeline now that posting
@@ -854,17 +924,41 @@ async function getNextJobForPosting() {
       return null;
     }
 
+    const companyRaw = toCommaString(
+      doc.company || doc.Company || doc.organisation || doc.organization || doc.employer
+    );
+    const roleRaw = toCommaString(doc.role || doc.Role || doc.jobTitle || doc.title);
+
+    let company = cleanJobField(companyRaw);
+    let role = cleanJobField(roleRaw);
+
+    // The external New_Jobs scraper sometimes fused the role into the company
+    // value (e.g. company="EYRole: Analyst – Assurance"). When the dedicated
+    // role field is empty, recover the role fragment and strip it from company.
+    const mergedRole = extractRoleFromMerged(companyRaw);
+    if (!role && mergedRole) {
+      role = cleanJobField(mergedRole);
+      company = cleanJobField(
+        companyRaw.replace(
+          /(?:role|title|designation|position|job title)\s*:\s*[^;\n]+/i,
+          ""
+        )
+      );
+    }
+
     return {
       ...doc,
       _id: doc._id,
-      company: toCommaString(doc.company || doc.Company || doc.organisation || doc.organization || doc.employer),
-      role: toCommaString(doc.role || doc.Role || doc.jobTitle || doc.title),
-      location: toCommaString(doc.location || doc.Location || doc.city || doc.workLocation),
-      eligibility: toCommaString(doc.eligibility || doc.Eligibility || doc.experience),
-      experience: toCommaString(doc.experience || doc.Experience),
-      jobType: toCommaString(doc.jobType || doc.JobType || doc.employmentType) || "Full-time",
-      skills: toCommaString(doc.skills || doc.Skills),
-      salaryRange: toCommaString(doc.salaryRange || doc.Salary || doc.salary),
+      company,
+      role,
+      location: cleanJobField(doc.location || doc.Location || doc.city || doc.workLocation),
+      eligibility: cleanJobField(doc.eligibility || doc.Eligibility || doc.experience),
+      experience: cleanJobField(doc.experience || doc.Experience),
+      jobType: cleanJobField(doc.jobType || doc.JobType || doc.employmentType) || "Full-time",
+      skills: cleanJobField(doc.skills || doc.Skills),
+      salaryRange: cleanJobField(doc.salaryRange || doc.Salary || doc.salary),
+      // The full description is intentionally NOT used in captions, but is
+      // preserved on the doc for the Post denormalized record.
       description: toCommaString(doc.description || doc.Description || doc.summary),
       applyLink: toCommaString(doc.applyLink || doc.apply_link || doc.url || doc.link),
       resourceLink: toCommaString(doc.resourceLink || doc.resource_link || doc.sourceLink || doc.source),
@@ -1031,6 +1125,8 @@ module.exports = {
   fetchFreshJobCandidates,
   locationTier,
   isIndiaOk,
+  cleanJobField,
+  extractRoleFromMerged,
   // keep legacy alias for safety
   getRandomJob: getFreshJob,
 };

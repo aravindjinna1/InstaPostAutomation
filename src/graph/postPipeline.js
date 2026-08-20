@@ -14,6 +14,7 @@ const { uploadImageToCloudinary, uploadVideoToCloudinary } = require("../service
 const { postImageToInstagram, postReelToInstagram } = require("../services/instagramService");
 const { getDailyPrompt } = require("../utils/promptrotationdaily");
 const { buildRealJobCaption, buildJobImagePrompt, getCompanyBrandColors, getPosterTheme } = require("../utils/jobPrompts");
+const { MAX_CAPTION_LENGTH } = require("../utils/jobPrompts");
 const { imageToReelVideo } = require("../services/videoService");
 const { getNextLocalMusicTrack } = require("../services/localMusicService");
 const { renderJobPoster } = require("../services/posterService");
@@ -238,6 +239,15 @@ async function uploadImageNode(state) {
  * that parameter is only for Instagram catalog tracks.
  */
 async function publishToInstagramNode(state) {
+  // Final safety gate BEFORE hitting the Instagram API: a missing or over-long
+  // caption must never be sent to Instagram. Publishing is not attempted here —
+  // the error short-circuits to finalize.
+  if (!state.caption || state.caption.length > MAX_CAPTION_LENGTH) {
+    const err = !state.caption ? "Caption is empty." : "The caption was too long.";
+    await writeLog(state.postId, "caption", "failure", err);
+    return { error: err, failedStage: "caption" };
+  }
+
   const result = await postReelToInstagram({
     igUserId: state.igUserId,
     accessToken: state.accessToken,
@@ -245,9 +255,12 @@ async function publishToInstagramNode(state) {
     caption: state.caption,
   });
 
-  if (!result.success) {
-    await writeLog(state.postId, result.stage || "media_publish", "failure", result.error);
-    return { error: result.error, failedStage: result.stage || "media_publish" };
+  // Success requires an ACTUAL published Instagram media id. Container creation
+  // alone, upload success, or a plain HTTP 200 are NOT a successful post.
+  if (!result.success || !result.igMediaId) {
+    const err = result.error || "Instagram did not return a published media id";
+    await writeLog(state.postId, result.stage || "media_publish", "failure", err);
+    return { error: err, failedStage: result.stage || "media_publish" };
   }
 
   await writeLog(state.postId, "media_publish", "success", result.igMediaId);
@@ -259,12 +272,20 @@ async function publishToInstagramNode(state) {
  * whether it succeeded or failed at some earlier stage.
  */
 async function finalizeNode(state) {
-  if (state.error) {
+  // A post is only ever marked "posted" after the ACTUAL publish request has
+  // succeeded and returned a real Instagram media id (state.igMediaId). A
+  // created container, a completed upload, "processing started", or a plain
+  // HTTP 200 response are NOT proof of publication and never count as success.
+  const published = !state.error && Boolean(state.igMediaId);
+
+  if (!published) {
     await Post.findByIdAndUpdate(state.postId, {
       status: "failed",
-      errorMessage: `[${state.failedStage}] ${state.error}`,
+      errorMessage: state.error
+        ? `[${state.failedStage}] ${state.error}`
+        : "[missing_media_id] Instagram publish did not return a media id",
     });
-} else {
+  } else {
     // Link the selected job to this post and mark it as posted so it
     // won't be reused for a future post.
     const job = state.job;

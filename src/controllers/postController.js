@@ -15,10 +15,13 @@ const { triggerDailyPost } = require("../cron/scheduler");
 async function runNow(req, res) {
   const result = await triggerDailyPost();
 
-  if (result.error) {
-    return res
-      .status(500)
-      .json({ success: false, stage: result.failedStage, error: result.error });
+  // Only an actual published Instagram media id counts as a successful post.
+  if (result.error || !result.igMediaId) {
+    return res.status(500).json({
+      success: false,
+      stage: result.failedStage || "unknown",
+      error: result.error || "Instagram did not return a published media id",
+    });
   }
 
   res.json({ success: true, igMediaId: result.igMediaId });
